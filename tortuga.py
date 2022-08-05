@@ -35,6 +35,7 @@ POSSIBILITY OF SUCH DAMAGE.
 __version__ = '0.1.0-dev'
 
 import argparse
+import getpass
 import os
 from pathlib import Path
 import subprocess
@@ -109,7 +110,7 @@ class _PluginSet(object):
         super().__init__()
         self._parsed = parsed
     
-    def build_plugin(self, plugid):
+    def build_plugin(self, plugid, keystore, alias, password=None):
         raise NotImplementedError('build_plugin')
         
     def has_plugin(self, plugid):
@@ -134,7 +135,7 @@ class _AntPluginSet(_PluginSet):
         self._root = path.parent
         self._cache = dict()
         
-    def build_plugin(self, plugid, alias, keystore):
+    def build_plugin(self, plugid, keystore, alias, password=None):
         # Get all directories for jarplugin -d
         curid = plugid
         dirs = list()
@@ -158,7 +159,12 @@ class _AntPluginSet(_PluginSet):
                '--jar', str(plugjar),
                '--alias', alias,
                '--keystore', keystore]
+        if password is not None:
+            cmd.extend(['--password', password])
         subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+        if not plugjar.exists():
+            raise FileNotFoundError(str(plugjar))
+        return plugjar
 
     def has_plugin(self, plugid):
         return self._plugin_path(plugid).exists()
@@ -214,8 +220,8 @@ class _TortugaOptions(object):
         group.add_argument('--version', action='version', version=__version__)
         # --build-plugin group
         group = parser.add_argument_group('Build a plugin (--build-plugin)')
-        group.add_argument('--password', metavar='PASS', help='use PASS as the keystore password and key password (default: interactive prompt)')
-        group.add_argument('--plugin-identifier', action='append', metavar='PLUG', help='add the plugin identifier to the list of plugins to build')
+        group.add_argument('--password', metavar='PASS', help='use %(metavar)s as the plugin signing keystore password (default: interactive prompt)')
+        group.add_argument('--plugin-identifier', metavar='PLUG', action='append', help='add %(metavar)s to the list of plugin identifiers to build')
         # Config group
         group = parser.add_argument_group('Configuration')
         group.add_argument('--settings', metavar='FILE', type=Path, default=_TortugaOptions.SETTINGS, help='load settings from %(metavar)s (default: %(default)s)')
@@ -249,47 +255,59 @@ class _TortugaOptions(object):
             if len(self.plugin_identifiers) == 0:
                 parser.error('list of plugins to build is empty')
             # --password -> _password
+            self._password = args.password or getpass.getpass('Plugin signing keystore password: ')
         #
         # Configuration block
         #
-        self.settings = args.settings
-        self.parsed_settings = None
-        self.plugin_sets = list()
+        # --settings -> settings_path
+        self.settings_path = args.settings
+        # Internal: settings, plugin_sets
+        self.settings = None
+        self.plugin_sets = None
 
-def _build_one_plugin(options, plugid, alias, keystore):
+def _build_one_plugin(options, plugid):
     for plugin_set in options.plugin_sets:
        if plugin_set.has_plugin(plugid):
-           plugin_set.build_plugin(plugid, alias, keystore)
-           break
+           return plugin_set.build_plugin(plugid,
+                                          options.settings['plugin-signing-keystore'],
+                                          options.settings['plugin-signing-alias'],
+                                          options._password)
     else:
         sys.exit('error: {} not found in any plugin set'.format(plugid))
 
 def _build_plugin(options):
     # Prerequisites
+    for x in ['plugin-signing-keystore', 'plugin-signing-alias']:
+        if x not in options.settings:
+            sys.exit('error: {} must be set in your settings'.format(x))
     _load_plugin_sets(options)
     if 'JAVA_HOME' not in os.environ:
         sys.exit('error: JAVA_HOME must be set in your environment')
-    for plugid in options.plugin_identifiers:
-        _build_one_plugin(options, plugid, 'thib-lockss', '/home/thib/.ssh/plugin/thib-lockss-old.keystore') #####FIXME
+    # Build plugins
+    return [_build_one_plugin(options, plugid) for plugid in options.plugin_identifiers]
 
 def _load_plugin_sets(options):
-    _load_settings(options)
-    options.plugin_sets = list()
-    for path in options.parsed_settings.get('plugin-sets', list()):
-        options.plugin_sets.extend(_PluginSet.from_path(path))
+    if options.plugin_sets is None:
+        if 'plugin-sets' not in options.settings:
+            sys.exit('error: plugin-sets must be set in your settings')
+        options.plugin_sets = list()
+        for path in options.settings['plugin-sets']:
+            options.plugin_sets.extend(_PluginSet.from_path(path))
 
 def _load_settings(options):
-    if options.parsed_settings is None:
-        with options.settings.open('r') as s:
-            options.parsed_settings = yaml.safe_load(s)
+    if options.settings is None:
+        with options.settings_path.open('r') as s:
+            options.settings = yaml.safe_load(s)
 
 #
 # Main driver
 #
 
 def _dispatch(options):
+    _load_settings(options)
     if options.build_plugin:
-        _build_plugin(options)
+        ret = _build_plugin(options)
+        print(ret) # FIXME
     else:
         raise RuntimeError('no command to dispatch')
 
