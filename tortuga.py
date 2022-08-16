@@ -95,16 +95,17 @@ class _PluginSet(object):
 
     @staticmethod
     def from_yaml(parsed, path):
-        kind = parsed.get('kind')
-        if kind != 'PluginSet':
-            raise RuntimeError('invalid kind: {}'.format(kind))
-        typ = parsed.get('type')
+        if parsed.get('kind') != 'PluginSet':
+            raise RuntimeError('{} is not of kind "PluginSet"'.format(path))
+        if 'builder' not in parsed:
+            raise RuntimeError('{} does not define "builder"'.format(path))
+        typ = parsed.get('builder').get('type')
         if typ == _PluginSet.TYPE_ANT:
             return _AntPluginSet(parsed, path)
         elif typ == _PluginSet.TYPE_MVN:
-            raise NotImplementedError('the plugin set type "mvn" is not implemented yet')
+            raise NotImplementedError('the plugin set builder type "mvn" is not implemented yet')
         else:
-            raise RuntimeError('unknown type: {}'.format(typ))
+            raise RuntimeError('unknown plugin set builder type: {}'.format(typ))
 
     def __init__(self, parsed):
         super().__init__()
@@ -207,12 +208,12 @@ class _TortugaOptions(object):
     def make_parser():
         # Make parser
         usage = '''
-    %(prog)s --build-plugin --plugin-identifier=PLUG --plugin-set=FILE
-    %(prog)s [--copyright|--help|--license|--usage|--version]'''
+    %(prog)s --build-plugin --plugin-identifier=PLUG [--settings=FILE]
+    %(prog)s (--copyright|--help|--license|--usage|--version)'''
         parser = argparse.ArgumentParser(usage=usage, add_help=False)
-        # Mutually exclusive commands       
+        # Mutually exclusive commands
         group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument('--build-plugin', action='store_true', help='build a plugin')
+        group.add_argument('--build-plugin', action='store_true', help='build plugins')
         group.add_argument('--copyright', action='store_true', help='show copyright and exit')
         group.add_argument('--help', '-h', action='help', help='show this help message and exit')
         group.add_argument('--license', action='store_true', help='show license and exit')
@@ -220,6 +221,7 @@ class _TortugaOptions(object):
         group.add_argument('--version', action='version', version=__version__)
         # --build-plugin group
         group = parser.add_argument_group('Build a plugin (--build-plugin)')
+        group.add_argument('--no-publish', action='store_true', help='only build plugins, do not publish')
         group.add_argument('--password', metavar='PASS', help='use %(metavar)s as the plugin signing keystore password (default: interactive prompt)')
         group.add_argument('--plugin-identifier', metavar='PLUG', action='append', help='add %(metavar)s to the list of plugin identifiers to build')
         # Config group
@@ -229,7 +231,7 @@ class _TortugaOptions(object):
         return parser
     
     def __init__(self, parser, args):
-        super(object, self).__init__()
+        super().__init__()
         #
         # One-and-done block
         #
@@ -250,6 +252,8 @@ class _TortugaOptions(object):
         if args.build_plugin:
             # --build-plugin -> build_plugin
             self.build_plugin = args.build_plugin
+            # --no-publish -> no_publish
+            self.no_publish = args.no_publish
             # --plugin-identifier -> plugin_identifiers
             self.plugin_identifiers = args.plugin_identifier or list()
             if len(self.plugin_identifiers) == 0:
@@ -281,10 +285,16 @@ def _build_plugin(options):
         if x not in options.settings:
             sys.exit('error: {} must be set in your settings'.format(x))
     _load_plugin_sets(options)
+    if not options.no_publish:
+        _load_plugin_registries(options)
     if 'JAVA_HOME' not in os.environ:
         sys.exit('error: JAVA_HOME must be set in your environment')
     # Build plugins
     return [_build_one_plugin(options, plugid) for plugid in options.plugin_identifiers]
+
+def _load_plugin_registries(options):
+    if options.plugin_registries is None:
+        pass ##FIXME
 
 def _load_plugin_sets(options):
     if options.plugin_sets is None:
@@ -298,6 +308,8 @@ def _load_settings(options):
     if options.settings is None:
         with options.settings_path.open('r') as s:
             options.settings = yaml.safe_load(s)
+            if options.settings.get('kind') != 'Settings':
+                sys.exit('error: {} is not of kind "Settings"'.format(options.settings_path))
 
 #
 # Main driver
