@@ -44,7 +44,7 @@ import xdg
 import xml.etree.ElementTree as ET
 import yaml
 
-class _Plugin(object):
+class Plugin(object):
 
     @staticmethod
     def id_to_file(plugid):
@@ -52,7 +52,7 @@ class _Plugin(object):
 
     @staticmethod
     def id_to_dir(plugid):
-        return _Plugin.id_to_file(plugid).parent
+        return Plugin.id_to_file(plugid).parent
 
     def __init__(self, path):
         super().__init__()
@@ -82,7 +82,7 @@ class _Plugin(object):
             raise ValueError('plugin declares {} entries for {}'.format(len(lst), key))
         return result(lst[0])
 
-class _PluginSet(object):
+class PluginSet(object):
 
     TYPE_ANT = 'ant'
     TYPE_MVN = 'mvn'
@@ -91,7 +91,7 @@ class _PluginSet(object):
     def from_path(path):
         path = Path(path) # in case it's a string
         with path.open('r') as f:
-            return [_PluginSet.from_yaml(parsed, path) for parsed in yaml.safe_load_all(f)]
+            return [PluginSet.from_yaml(parsed, path) for parsed in yaml.safe_load_all(f)]
 
     @staticmethod
     def from_yaml(parsed, path):
@@ -100,9 +100,9 @@ class _PluginSet(object):
         if 'builder' not in parsed:
             raise RuntimeError('{} does not define "builder"'.format(path))
         typ = parsed.get('builder').get('type')
-        if typ == _PluginSet.TYPE_ANT:
-            return _AntPluginSet(parsed, path)
-        elif typ == _PluginSet.TYPE_MVN:
+        if typ == PluginSet.TYPE_ANT:
+            return AntPluginSet(parsed, path)
+        elif typ == PluginSet.TYPE_MVN:
             raise NotImplementedError('the plugin set builder type "mvn" is not implemented yet')
         else:
             raise RuntimeError('unknown plugin set builder type: {}'.format(typ))
@@ -129,7 +129,7 @@ class _PluginSet(object):
 #
 # class _AntPluginSet
 #
-class _AntPluginSet(_PluginSet):
+class AntPluginSet(PluginSet):
         
     def __init__(self, parsed, path):
         super().__init__(parsed)
@@ -141,14 +141,15 @@ class _AntPluginSet(_PluginSet):
         curid = plugid
         dirs = list()
         while curid is not None:
-            curdir = _Plugin.id_to_dir(curid)
+            curdir = Plugin.id_to_dir(curid)
             if curdir not in dirs:
                 dirs.append(curdir)
             curid = self.make_plugin(curid).parent_identifier()
         dirs = [str(i).replace('.', '/') for i in dirs]
         # Invoke jarplugin
-        plugfile = _Plugin.id_to_file(plugid)
+        plugfile = Plugin.id_to_file(plugid)
         plugjar = self.root_path().joinpath('plugins/jars', '{}.jar'.format(plugfile.stem))
+        plugjar.parent.mkdir(parents=True, exist_ok=True)
         cmd = ['test/scripts/jarplugin',
                '-j', str(plugjar),
                 '-p', str(plugfile)]
@@ -179,7 +180,7 @@ class _AntPluginSet(_PluginSet):
     def make_plugin(self, plugid):
         ret = self._cache.get(plugid)
         if ret is None:
-            ret = _Plugin(self._plugin_path(plugid))
+            ret = Plugin(self._plugin_path(plugid))
             self._cache[plugid] = ret
         return ret
         
@@ -196,42 +197,43 @@ class _AntPluginSet(_PluginSet):
         return self.root_path().joinpath(self.test())
         
     def _plugin_path(self, plugid):
-        return Path(self.main_path()).joinpath(_Plugin.id_to_file(plugid))
-    
-class _TortugaOptions(object):
+        return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
+
+class Tortuga(object):
     
     XDG_DIR='tortuga'
     CONFIG_DIR=xdg.xdg_config_home().joinpath(XDG_DIR)
     SETTINGS=CONFIG_DIR.joinpath('settings.yaml')
-    
-    @staticmethod
-    def make_parser():
-        # Make parser
-        usage = '''
-    %(prog)s --build-plugin --plugin-identifier=PLUG [--settings=FILE]
-    %(prog)s (--copyright|--help|--license|--usage|--version)'''
-        parser = argparse.ArgumentParser(usage=usage, add_help=False)
-        # Mutually exclusive commands
-        group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument('--build-plugin', action='store_true', help='build plugins')
-        group.add_argument('--copyright', action='store_true', help='show copyright and exit')
-        group.add_argument('--help', '-h', action='help', help='show this help message and exit')
-        group.add_argument('--license', action='store_true', help='show license and exit')
-        group.add_argument('--usage', action='store_true', help='show usage information and exit')
-        group.add_argument('--version', action='version', version=__version__)
-        # --build-plugin group
-        group = parser.add_argument_group('Build a plugin (--build-plugin)')
-        group.add_argument('--no-publish', action='store_true', help='only build plugins, do not publish')
-        group.add_argument('--password', metavar='PASS', help='use %(metavar)s as the plugin signing keystore password (default: interactive prompt)')
-        group.add_argument('--plugin-identifier', metavar='PLUG', action='append', help='add %(metavar)s to the list of plugin identifiers to build')
-        # Config group
-        group = parser.add_argument_group('Configuration')
-        group.add_argument('--settings', metavar='FILE', type=Path, default=_TortugaOptions.SETTINGS, help='load settings from %(metavar)s (default: %(default)s)')
-        # Return parser
-        return parser
-    
-    def __init__(self, parser, args):
+
+    def __init__(self):
         super().__init__()
+
+    def do_build_one_plugin(self, plugid):
+        for plugin_set in self.plugin_sets:
+           if plugin_set.has_plugin(plugid):
+               return plugin_set.build_plugin(plugid,
+                                              self.settings['plugin-signing-keystore'],
+                                              self.settings['plugin-signing-alias'],
+                                              self._password)
+        else:
+            sys.exit('error: {} not found in any plugin set'.format(plugid))
+
+    def do_build_plugin(self):
+        # Prerequisites
+        for x in ['plugin-signing-keystore', 'plugin-signing-alias']:
+            if x not in self.settings:
+                sys.exit('error: {} must be set in your settings'.format(x))
+        self.load_plugin_sets()
+        if not self.no_deploy:
+            self.load_plugin_registries()
+        if 'JAVA_HOME' not in os.environ:
+            sys.exit('error: JAVA_HOME must be set in your environment')
+        # Build plugins
+        return [self.do_build_one_plugin(plugid) for plugid in self.plugin_identifiers]
+
+    def initialize(self):
+        parser = self.make_parser()
+        args = parser.parse_args()
         #
         # One-and-done block
         #
@@ -252,8 +254,8 @@ class _TortugaOptions(object):
         if args.build_plugin:
             # --build-plugin -> build_plugin
             self.build_plugin = args.build_plugin
-            # --no-publish -> no_publish
-            self.no_publish = args.no_publish
+            # --no-deploy -> no_deploy
+            self.no_deploy = args.no_deploy
             # --plugin-identifier -> plugin_identifiers
             self.plugin_identifiers = args.plugin_identifier or list()
             if len(self.plugin_identifiers) == 0:
@@ -265,71 +267,68 @@ class _TortugaOptions(object):
         #
         # --settings -> settings_path
         self.settings_path = args.settings
+        #
         # Internal: settings, plugin_sets
+        #
         self.settings = None
         self.plugin_sets = None
+        self.plugin_registries = None
 
-def _build_one_plugin(options, plugid):
-    for plugin_set in options.plugin_sets:
-       if plugin_set.has_plugin(plugid):
-           return plugin_set.build_plugin(plugid,
-                                          options.settings['plugin-signing-keystore'],
-                                          options.settings['plugin-signing-alias'],
-                                          options._password)
-    else:
-        sys.exit('error: {} not found in any plugin set'.format(plugid))
+    def load_plugin_registries(self):
+        if self.plugin_registries is None:
+            pass ##FIXME
 
-def _build_plugin(options):
-    # Prerequisites
-    for x in ['plugin-signing-keystore', 'plugin-signing-alias']:
-        if x not in options.settings:
-            sys.exit('error: {} must be set in your settings'.format(x))
-    _load_plugin_sets(options)
-    if not options.no_publish:
-        _load_plugin_registries(options)
-    if 'JAVA_HOME' not in os.environ:
-        sys.exit('error: JAVA_HOME must be set in your environment')
-    # Build plugins
-    return [_build_one_plugin(options, plugid) for plugid in options.plugin_identifiers]
+    def load_plugin_sets(self):
+        if self.plugin_sets is None:
+            if 'plugin-sets' not in self.settings:
+                sys.exit('error: plugin-sets must be set in your settings')
+            self.plugin_sets = list()
+            for path in self.settings['plugin-sets']:
+                self.plugin_sets.extend(PluginSet.from_path(path))
 
-def _load_plugin_registries(options):
-    if options.plugin_registries is None:
-        pass ##FIXME
+    def load_settings(self):
+        with self.settings_path.open('r') as s:
+            self.settings = yaml.safe_load(s)
+            if self.settings.get('kind') != 'Settings':
+                sys.exit('error: {} is not of kind "Settings"'.format(self.settings_path))
 
-def _load_plugin_sets(options):
-    if options.plugin_sets is None:
-        if 'plugin-sets' not in options.settings:
-            sys.exit('error: plugin-sets must be set in your settings')
-        options.plugin_sets = list()
-        for path in options.settings['plugin-sets']:
-            options.plugin_sets.extend(_PluginSet.from_path(path))
+    def make_parser(self):
+        # Make parser
+        usage = '''
+    %(prog)s --build-plugin --plugin-identifier=PLUG [--settings=FILE]
+    %(prog)s (--copyright|--help|--license|--usage|--version)'''
+        parser = argparse.ArgumentParser(usage=usage, add_help=False)
+        # Mutually exclusive commands
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument('--build-plugin', action='store_true', help='build and deploy plugins')
+        group.add_argument('--copyright', action='store_true', help='show copyright and exit')
+        group.add_argument('--help', '-h', action='help', help='show this help message and exit')
+        group.add_argument('--license', action='store_true', help='show license and exit')
+        group.add_argument('--usage', action='store_true', help='show usage information and exit')
+        group.add_argument('--version', action='version', version=__version__)
+        # --build-plugin group
+        group = parser.add_argument_group('Build and deploy plugins (--build-plugin)')
+        group.add_argument('--no-deploy', action='store_true', help='only build plugins, do not deploy')
+        group.add_argument('--password', metavar='PASS', help='use %(metavar)s as the plugin signing keystore password (default: interactive prompt)')
+        group.add_argument('--plugin-identifier', metavar='PLUG', action='append', help='add %(metavar)s to the list of plugin identifiers to build')
+        # Config group
+        group = parser.add_argument_group('Configuration')
+        group.add_argument('--settings', metavar='FILE', type=Path, default=Tortuga.SETTINGS, help='load settings from %(metavar)s (default: %(default)s)')
+        # Return parser
+        return parser
 
-def _load_settings(options):
-    if options.settings is None:
-        with options.settings_path.open('r') as s:
-            options.settings = yaml.safe_load(s)
-            if options.settings.get('kind') != 'Settings':
-                sys.exit('error: {} is not of kind "Settings"'.format(options.settings_path))
+    def run(self):
+        self.initialize()
+        self.load_settings()
+        if self.build_plugin:
+            ret = self.do_build_plugin()
+            print(ret) # FIXME
+        else:
+            raise RuntimeError('no command to dispatch')
 
 #
-# Main driver
+# Main entry point
 #
 
-def _dispatch(options):
-    _load_settings(options)
-    if options.build_plugin:
-        ret = _build_plugin(options)
-        print(ret) # FIXME
-    else:
-        raise RuntimeError('no command to dispatch')
-
-def _main():
-    '''Main method.'''
-    # Parse command line
-    parser = _TortugaOptions.make_parser()
-    args = parser.parse_args()
-    options = _TortugaOptions(parser, args)
-    _dispatch(options)
-
-if __name__ == '__main__': _main()
+if __name__ == '__main__': Tortuga().run()
 
