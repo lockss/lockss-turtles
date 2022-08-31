@@ -82,10 +82,67 @@ class Plugin(object):
             raise ValueError('plugin declares {} entries for {}'.format(len(lst), key))
         return result(lst[0])
 
+class PluginRegistry(object):
+    
+    KIND = 'PluginRegistry'
+    LAYOUT_RCS = 'rcs'
+    
+    @staticmethod
+    def from_path(path):
+        path = Path(path) # in case it's a string
+        with path.open('r') as f:
+            return [PluginRegistry.from_yaml(parsed, path) for parsed in yaml.safe_load_all(f)]
+
+    @staticmethod
+    def from_yaml(parsed, path):
+        kind = parsed.get('kind')
+        if kind is None:
+            raise RuntimeError('{}: undefined kind'.format(path)) 
+        elif kind != PluginRegistry.KIND:
+            raise RuntimeError('{}: not of kind {}: {}'.format(path, PluginRegistry.KIND, kind))
+        layout = parsed.get('layout')
+        if layout is None:
+            raise RuntimeError('{}: undefined layout'.format(path))
+        elif layout == RcsPluginRegistry.LAYOUT:
+            return RcsPluginRegistry(parsed)
+        else:
+            raise RuntimeError('{}: unknown layout: {}'.format(path, layout))
+
+    def __init__(self, parsed):
+        super().__init__()
+        self._parsed = parsed
+
+    def deploy_plugin(self, plugid):
+        raise NotImplementedError('deploy_plugin')
+        
+    def has_plugin(self, plugid):
+        return plugid in self.plugin_identifiers()
+        
+    def layout(self):
+        return self._parsed['layout']
+    
+    def name(self):
+        return self._parsed['name']
+    
+    def plugin_identifiers(self):
+        return self._parsed['plugin-identifiers']
+    
+    def prod(self):
+        return Path(self._parsed['prod'])
+    
+    def test(self):
+        return Path(self._parsed['test'])
+    
+class RcsPluginRegistry(PluginRegistry):
+    
+    LAYOUT = 'rcs'
+
+    def __init__(self, parsed):
+        super().__init__(parsed)
+
 class PluginSet(object):
 
-    TYPE_ANT = 'ant'
-    TYPE_MVN = 'mvn'
+    KIND = 'PluginSet'
 
     @staticmethod
     def from_path(path):
@@ -95,17 +152,23 @@ class PluginSet(object):
 
     @staticmethod
     def from_yaml(parsed, path):
-        if parsed.get('kind') != 'PluginSet':
-            raise RuntimeError('{} is not of kind "PluginSet"'.format(path))
-        if 'builder' not in parsed:
-            raise RuntimeError('{} does not define "builder"'.format(path))
-        typ = parsed.get('builder').get('type')
-        if typ == PluginSet.TYPE_ANT:
+        kind = parsed.get('kind')
+        if kind is None:
+            raise RuntimeError('{}: undefined kind'.format(path)) 
+        elif kind != PluginSet.KIND:
+            raise RuntimeError('{}: not of kind {}: {}'.format(path, PluginSet.KIND, kind))
+        builder = parsed.get('builder')
+        if builder is None:
+            raise RuntimeError('{}: undefined builder'.format(path))
+        typ = builder.get('type')
+        if typ is None:
+            raise RuntimeError('{}: undefined builder type'.format(path))
+        elif typ == AntPluginSet.TYPE:
             return AntPluginSet(parsed, path)
-        elif typ == PluginSet.TYPE_MVN:
-            raise NotImplementedError('the plugin set builder type "mvn" is not implemented yet')
+        elif typ == 'mvn':
+            raise NotImplementedError('{}: the builder type mvn is not implemented yet')
         else:
-            raise RuntimeError('unknown plugin set builder type: {}'.format(typ))
+            raise RuntimeError('{}: unknown builder type: {}'.format(path, typ))
 
     def __init__(self, parsed):
         super().__init__()
@@ -114,6 +177,9 @@ class PluginSet(object):
     def build_plugin(self, plugid, keystore, alias, password=None):
         raise NotImplementedError('build_plugin')
         
+    def builder_type(self):
+        return self._parsed['builder']['type']
+    
     def has_plugin(self, plugid):
         raise NotImplementedError('has_plugin')
         
@@ -123,13 +189,12 @@ class PluginSet(object):
     def name(self):
         return self._parsed['name']
     
-    def type(self):
-        return self._parsed['type']
-    
 #
 # class _AntPluginSet
 #
 class AntPluginSet(PluginSet):
+
+    TYPE = 'ant'
         
     def __init__(self, parsed, path):
         super().__init__(parsed)
@@ -208,7 +273,7 @@ class Tortuga(object):
     def __init__(self):
         super().__init__()
 
-    def do_build_one_plugin(self, plugid):
+    def do_build_plugin(self, plugid):
         for plugin_set in self.plugin_sets:
            if plugin_set.has_plugin(plugid):
                return plugin_set.build_plugin(plugid,
@@ -218,18 +283,29 @@ class Tortuga(object):
         else:
             sys.exit('error: {} not found in any plugin set'.format(plugid))
 
-    def do_build_plugin(self):
+    def do_deploy_plugin(self, plugid, jarpath):
         # Prerequisites
-        for x in ['plugin-signing-keystore', 'plugin-signing-alias']:
-            if x not in self.settings:
-                sys.exit('error: {} must be set in your settings'.format(x))
+        for plugin_registry in self.plugin_registries:
+            if plugin_registry.has_plugin(plugid):
+                plugin_registry.deploy_plugin(plugid)
+        else:
+            sys.exit('error: {} is not declared in any plugin registry')
+
+    def do_publish_plugin(self):
+        # Prerequisites
+        for setting in ['plugin-signing-keystore', 'plugin-signing-alias']:
+            if setting not in self.settings:
+                sys.exit('error: {} must be set in your settings'.format(setting))
         self.load_plugin_sets()
         if not self.no_deploy:
             self.load_plugin_registries()
         if 'JAVA_HOME' not in os.environ:
             sys.exit('error: JAVA_HOME must be set in your environment')
         # Build plugins
-        return [self.do_build_one_plugin(plugid) for plugid in self.plugin_identifiers]
+        plugid_jarpath_tuples = [(plugid, self.do_build_plugin(plugid)) for plugid in self.plugin_identifiers]
+        if not self.no_deploy:
+            for plugid, jarpath in plugid_jarpath_tuples:
+                self.do_deploy_plugin(plugid, jarpath)
 
     def initialize(self):
         parser = self.make_parser()
@@ -249,11 +325,11 @@ class Tortuga(object):
             parser.exit()
         # --version is automatic
         #
-        # --build-plugin block
+        # --publish-plugin block
         #
-        if args.build_plugin:
-            # --build-plugin -> build_plugin
-            self.build_plugin = args.build_plugin
+        if args.publish_plugin:
+            # --publish-plugin -> publish_plugin
+            self.publish_plugin = args.publish_plugin
             # --no-deploy -> no_deploy
             self.no_deploy = args.no_deploy
             # --plugin-identifier -> plugin_identifiers
@@ -276,7 +352,11 @@ class Tortuga(object):
 
     def load_plugin_registries(self):
         if self.plugin_registries is None:
-            pass ##FIXME
+            if 'plugin-registries' not in self.settings:
+                sys.exit('error: plugin-registries must be set in your settings')
+            self.plugin_registries = list()
+            for path in self.settings['plugin-registries']:
+                self.plugin_registries.extend(PluginRegistry.from_path(path))
 
     def load_plugin_sets(self):
         if self.plugin_sets is None:
@@ -289,8 +369,11 @@ class Tortuga(object):
     def load_settings(self):
         with self.settings_path.open('r') as s:
             self.settings = yaml.safe_load(s)
-            if self.settings.get('kind') != 'Settings':
-                sys.exit('error: {} is not of kind "Settings"'.format(self.settings_path))
+            kind = self.settings.get('kind')
+            if kind is None:
+                sys.exit('{}: undefined kind'.format(self.settings_path))
+            elif kind != 'Settings':
+                sys.exit('{}: unknown kind: {}'.format(self.settings_path, kind))
 
     def make_parser(self):
         # Make parser
@@ -300,13 +383,13 @@ class Tortuga(object):
         parser = argparse.ArgumentParser(usage=usage, add_help=False)
         # Mutually exclusive commands
         group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument('--build-plugin', action='store_true', help='build and deploy plugins')
+        group.add_argument('--publish-plugin', action='store_true', help='build and deploy plugins')
         group.add_argument('--copyright', action='store_true', help='show copyright and exit')
         group.add_argument('--help', '-h', action='help', help='show this help message and exit')
         group.add_argument('--license', action='store_true', help='show license and exit')
         group.add_argument('--usage', action='store_true', help='show usage information and exit')
         group.add_argument('--version', action='version', version=__version__)
-        # --build-plugin group
+        # --publish-plugin group
         group = parser.add_argument_group('Build and deploy plugins (--build-plugin)')
         group.add_argument('--no-deploy', action='store_true', help='only build plugins, do not deploy')
         group.add_argument('--password', metavar='PASS', help='use %(metavar)s as the plugin signing keystore password (default: interactive prompt)')
@@ -320,8 +403,8 @@ class Tortuga(object):
     def run(self):
         self.initialize()
         self.load_settings()
-        if self.build_plugin:
-            ret = self.do_build_plugin()
+        if self.publish_plugin:
+            ret = self.do_publish_plugin()
             print(ret) # FIXME
         else:
             raise RuntimeError('no command to dispatch')
