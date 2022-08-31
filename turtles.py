@@ -37,12 +37,19 @@ __version__ = '0.1.0-dev'
 import argparse
 import getpass
 import os
-from pathlib import Path
+from pathlib import Path, PurePath
+import shutil
 import subprocess
 import sys
 import xdg
 import xml.etree.ElementTree as ET
 import yaml
+
+def _path(purepath_or_string):
+    if issubclass(type(purepath_or_string), PurePath):
+        return purepath_or_string
+    else:
+        return Path(purepath_or_string).expanduser().resolve() 
 
 class Plugin(object):
 
@@ -89,7 +96,7 @@ class PluginRegistry(object):
     
     @staticmethod
     def from_path(path):
-        path = Path(path) # in case it's a string
+        path = _path(path)
         with path.open('r') as f:
             return [PluginRegistry.from_yaml(parsed, path) for parsed in yaml.safe_load_all(f)]
 
@@ -112,7 +119,7 @@ class PluginRegistry(object):
         super().__init__()
         self._parsed = parsed
 
-    def deploy_plugin(self, plugid):
+    def deploy_plugin(self, plugid, srcpath, testing=False, production=False, interactive=False):
         raise NotImplementedError('deploy_plugin')
         
     def has_plugin(self, plugid):
@@ -127,11 +134,11 @@ class PluginRegistry(object):
     def plugin_identifiers(self):
         return self._parsed['plugin-identifiers']
     
-    def prod(self):
-        return Path(self._parsed['prod'])
+    def prod_path(self):
+        return _path(self._parsed['prod'])
     
-    def test(self):
-        return Path(self._parsed['test'])
+    def test_path(self):
+        return _path(self._parsed.get('test'))
     
 class RcsPluginRegistry(PluginRegistry):
     
@@ -140,13 +147,34 @@ class RcsPluginRegistry(PluginRegistry):
     def __init__(self, parsed):
         super().__init__(parsed)
 
+    def deploy_plugin(self, plugid, srcpath, testing=False, production=False, interactive=False):
+        if not (testing or production):
+            raise RuntimeError('must deploy to at least one of testing or production')
+        if testing:
+            self.do_deploy_plugin(plugid, srcpath, self.test_path(), interactive)
+        if production:
+            self.do_deploy_plugin(plugid, srcpath, self.prod_path(), interactive)
+
+    def do_deploy_plugin(self, plugid, srcpath, regpath, interactive=False):
+        dstpath = Path(regpath, srcpath.name)
+        if not dstpath.exists():
+            if interactive:
+                i = input('{} does not exist in {}; create it (y/n)? [n] '.format(dstpath, self.name())).lower() or 'n'
+                if i == 'n':
+                    return
+            do_chcon = (subprocess.run('command -v selinuxenabled && selinuxenabled && command -v chcon', shell=True).returncode == 0)
+            shutil(str(srcpath), str(dstpath))
+            if do_chcon:
+                subprocess.run(['chcon', '-t', 'httpd_sys_content_t', str(dstfile)], check=True)
+            # next step: do ci -u with -t-"The Descriptive String" ###FIXME
+        
 class PluginSet(object):
 
     KIND = 'PluginSet'
 
     @staticmethod
     def from_path(path):
-        path = Path(path) # in case it's a string
+        path = _path(path)
         with path.open('r') as f:
             return [PluginSet.from_yaml(parsed, path) for parsed in yaml.safe_load_all(f)]
 
@@ -225,7 +253,7 @@ class AntPluginSet(PluginSet):
         cmd = ['test/scripts/signplugin',
                '--jar', str(plugjar),
                '--alias', alias,
-               '--keystore', keystore]
+               '--keystore', str(keystore)]
         if password is not None:
             cmd.extend(['--password', password])
         subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
@@ -277,7 +305,7 @@ class Turtles(object):
         for plugin_set in self.plugin_sets:
            if plugin_set.has_plugin(plugid):
                return plugin_set.build_plugin(plugid,
-                                              self.settings['plugin-signing-keystore'],
+                                              _path(self.settings['plugin-signing-keystore']),
                                               self.settings['plugin-signing-alias'],
                                               self._password)
         else:
@@ -285,13 +313,16 @@ class Turtles(object):
 
     def do_deploy_plugin(self, plugid, jarpath):
         # Prerequisites
+        
+        atleast1 = False
         for plugin_registry in self.plugin_registries:
             if plugin_registry.has_plugin(plugid):
-                plugin_registry.deploy_plugin(plugid)
-        else:
+                plugin_registry.deploy_plugin(plugid, jarpath, testing=True, production=True)
+                atleast1 = True
+        if not atleast1:
             sys.exit('error: {} is not declared in any plugin registry')
 
-    def do_publish_plugin(self):
+    def do_release_plugin(self):
         # Prerequisites
         for setting in ['plugin-signing-keystore', 'plugin-signing-alias']:
             if setting not in self.settings:
@@ -305,7 +336,11 @@ class Turtles(object):
         plugid_jarpath_tuples = [(plugid, self.do_build_plugin(plugid)) for plugid in self.plugin_identifiers]
         if not self.no_deploy:
             for plugid, jarpath in plugid_jarpath_tuples:
-                self.do_deploy_plugin(plugid, jarpath)
+                self.do_deploy_plugin(plugid,
+                                      jarpath,
+                                      testing=self.testing,
+                                      production=self.production,
+                                      interactive=self.interactive)
 
     def initialize(self):
         parser = self.make_parser()
@@ -336,12 +371,17 @@ class Turtles(object):
             self.plugin_identifiers = args.plugin_identifier or list()
             if len(self.plugin_identifiers) == 0:
                 parser.error('list of plugins to build is empty')
+            # --testing -> testing
+            self.testing = args.testing
+            # --production -> production
+            self.production = args.production
             # --password -> _password
             self._password = args.password or getpass.getpass('Plugin signing keystore password: ')
         #
         # Configuration block
         #
         # --settings -> settings_path
+        self.interactive = args.interactive
         self.settings_path = args.settings
         #
         # Internal: settings, plugin_sets
@@ -382,20 +422,25 @@ class Turtles(object):
     %(prog)s (--copyright|--help|--license|--usage|--version)'''
         parser = argparse.ArgumentParser(usage=usage, add_help=False)
         # Mutually exclusive commands
-        group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument('--release-plugin', action='store_true', help='build and deploy plugins')
-        group.add_argument('--copyright', action='store_true', help='show copyright and exit')
-        group.add_argument('--help', '-h', action='help', help='show this help message and exit')
-        group.add_argument('--license', action='store_true', help='show license and exit')
-        group.add_argument('--usage', action='store_true', help='show usage information and exit')
-        group.add_argument('--version', action='version', version=__version__)
+        mutexgroup = parser.add_mutually_exclusive_group(required=True)
+        mutexgroup.add_argument('--release-plugin', '-r', action='store_true', help='build and deploy plugins')
+        mutexgroup.add_argument('--copyright', '-C', action='store_true', help='show copyright and exit')
+        mutexgroup.add_argument('--help', '-h', action='help', help='show this help message and exit')
+        mutexgroup.add_argument('--license', '-L', action='store_true', help='show license and exit')
+        mutexgroup.add_argument('--usage', '-U', action='store_true', help='show usage information and exit')
+        mutexgroup.add_argument('--version', '-V', action='version', version=__version__)
         # --release-plugin group
         group = parser.add_argument_group('Build and deploy plugins (--release-plugin)')
         group.add_argument('--no-deploy', action='store_true', help='only build plugins, do not deploy')
         group.add_argument('--password', metavar='PASS', help='use %(metavar)s as the plugin signing keystore password (default: interactive prompt)')
         group.add_argument('--plugin-identifier', metavar='PLUG', action='append', help='add %(metavar)s to the list of plugin identifiers to build')
+        group.add_argument('--production', '-p', action='store_true', help="deploy to the registry's production directory")
+        group.add_argument('--testing', '-t', action='store_true', help="deploy to the registry's testing directory")
         # Config group
         group = parser.add_argument_group('Configuration')
+        mutexgroup = group.add_mutually_exclusive_group()
+        mutexgroup.add_argument('--interactive', '-i', action='store_true', help='enable interactive prompts (default: --non-interactive)')
+        mutexgroup.add_argument('--non-interactive', '-n', dest='interactive', action='store_const', const=False, help='disallow interactive prompts (default)')
         group.add_argument('--settings', metavar='FILE', type=Path, default=Turtles.SETTINGS, help='load settings from %(metavar)s (default: %(default)s)')
         # Return parser
         return parser
