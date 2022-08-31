@@ -264,9 +264,9 @@ class AntPluginSet(PluginSet):
     def _plugin_path(self, plugid):
         return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
 
-class Tortuga(object):
+class Turtles(object):
     
-    XDG_DIR='tortuga'
+    XDG_DIR='turtles'
     CONFIG_DIR=xdg.xdg_config_home().joinpath(XDG_DIR)
     SETTINGS=CONFIG_DIR.joinpath('settings.yaml')
 
@@ -325,11 +325,11 @@ class Tortuga(object):
             parser.exit()
         # --version is automatic
         #
-        # --publish-plugin block
+        # --release-plugin block
         #
-        if args.publish_plugin:
-            # --publish-plugin -> publish_plugin
-            self.publish_plugin = args.publish_plugin
+        if args.release_plugin:
+            # --release-plugin -> release_plugin
+            self.release_plugin = args.release_plugin
             # --no-deploy -> no_deploy
             self.no_deploy = args.no_deploy
             # --plugin-identifier -> plugin_identifiers
@@ -383,28 +383,28 @@ class Tortuga(object):
         parser = argparse.ArgumentParser(usage=usage, add_help=False)
         # Mutually exclusive commands
         group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument('--publish-plugin', action='store_true', help='build and deploy plugins')
+        group.add_argument('--release-plugin', action='store_true', help='build and deploy plugins')
         group.add_argument('--copyright', action='store_true', help='show copyright and exit')
         group.add_argument('--help', '-h', action='help', help='show this help message and exit')
         group.add_argument('--license', action='store_true', help='show license and exit')
         group.add_argument('--usage', action='store_true', help='show usage information and exit')
         group.add_argument('--version', action='version', version=__version__)
-        # --publish-plugin group
-        group = parser.add_argument_group('Build and deploy plugins (--build-plugin)')
+        # --release-plugin group
+        group = parser.add_argument_group('Build and deploy plugins (--release-plugin)')
         group.add_argument('--no-deploy', action='store_true', help='only build plugins, do not deploy')
         group.add_argument('--password', metavar='PASS', help='use %(metavar)s as the plugin signing keystore password (default: interactive prompt)')
         group.add_argument('--plugin-identifier', metavar='PLUG', action='append', help='add %(metavar)s to the list of plugin identifiers to build')
         # Config group
         group = parser.add_argument_group('Configuration')
-        group.add_argument('--settings', metavar='FILE', type=Path, default=Tortuga.SETTINGS, help='load settings from %(metavar)s (default: %(default)s)')
+        group.add_argument('--settings', metavar='FILE', type=Path, default=Turtles.SETTINGS, help='load settings from %(metavar)s (default: %(default)s)')
         # Return parser
         return parser
 
     def run(self):
         self.initialize()
         self.load_settings()
-        if self.publish_plugin:
-            ret = self.do_publish_plugin()
+        if self.release_plugin:
+            ret = self.do_release_plugin()
             print(ret) # FIXME
         else:
             raise RuntimeError('no command to dispatch')
@@ -413,5 +413,5 @@ class Tortuga(object):
 # Main entry point
 #
 
-if __name__ == '__main__': Tortuga().run()
+if __name__ == '__main__': Turtles().run()
 
