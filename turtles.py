@@ -156,17 +156,27 @@ class RcsPluginRegistry(PluginRegistry):
             self.do_deploy_plugin(plugid, srcpath, self.prod_path(), interactive)
 
     def do_deploy_plugin(self, plugid, srcpath, regpath, interactive=False):
-        dstpath = Path(regpath, srcpath.name)
-        if not dstpath.exists():
+        filestr = srcpath.name
+        dstpath = Path(regpath, filestr)
+        do_chcon = (subprocess.run('command -v selinuxenabled && selinuxenabled && command -v chcon', shell=True).returncode == 0)
+        is_new = not dstpath.exists()
+        if is_new:
             if interactive:
                 i = input('{} does not exist in {}; create it (y/n)? [n] '.format(dstpath, self.name())).lower() or 'n'
-                if i == 'n':
+                if i != 'y':
                     return
-            do_chcon = (subprocess.run('command -v selinuxenabled && selinuxenabled && command -v chcon', shell=True).returncode == 0)
-            shutil(str(srcpath), str(dstpath))
-            if do_chcon:
-                subprocess.run(['chcon', '-t', 'httpd_sys_content_t', str(dstfile)], check=True)
-            # next step: do ci -u with -t-"The Descriptive String" ###FIXME
+        else:
+            cmd = ['co', '-l', filestr]
+            subprocess.run(cmd, check=True, cwd=str(regpath))
+        shutil.copy(str(srcpath), str(dstpath))
+        if do_chcon:
+            cmd = ['chcon', '-t', 'httpd_sys_content_t', filestr]
+            subprocess.run(cmd, check=True, cwd=str(regpath))
+        cmd = ['ci', '-u', '-m{}'.format('FIXMEVERSION')]
+        if is_new:
+            cmd.append(['-t-{}'.format('FIXMEDESCR'), filestr]) 
+        cmd.append(filestr)
+        subprocess.run(cmd, check=True, cwd=str(regpath))
         
 class PluginSet(object):
 
@@ -317,7 +327,11 @@ class Turtles(object):
         atleast1 = False
         for plugin_registry in self.plugin_registries:
             if plugin_registry.has_plugin(plugid):
-                plugin_registry.deploy_plugin(plugid, jarpath, testing=True, production=True)
+                plugin_registry.deploy_plugin(plugid,
+                                              jarpath,
+                                              testing=self.testing,
+                                              production=self.production,
+                                              interactive=self.interactive)
                 atleast1 = True
         if not atleast1:
             sys.exit('error: {} is not declared in any plugin registry')
@@ -336,11 +350,7 @@ class Turtles(object):
         plugid_jarpath_tuples = [(plugid, self.do_build_plugin(plugid)) for plugid in self.plugin_identifiers]
         if not self.no_deploy:
             for plugid, jarpath in plugid_jarpath_tuples:
-                self.do_deploy_plugin(plugid,
-                                      jarpath,
-                                      testing=self.testing,
-                                      production=self.production,
-                                      interactive=self.interactive)
+                self.do_deploy_plugin(plugid, jarpath)
 
     def initialize(self):
         parser = self.make_parser()
@@ -418,7 +428,7 @@ class Turtles(object):
     def make_parser(self):
         # Make parser
         usage = '''
-    %(prog)s --build-plugin --plugin-identifier=PLUG [--settings=FILE]
+    %(prog)s --release-plugin [--interactive|--non-interactive] [--password=PASS] [--production] [--settings=FILE] [--testing] --plugin-identifier=PLUG
     %(prog)s (--copyright|--help|--license|--usage|--version)'''
         parser = argparse.ArgumentParser(usage=usage, add_help=False)
         # Mutually exclusive commands
@@ -449,8 +459,7 @@ class Turtles(object):
         self.initialize()
         self.load_settings()
         if self.release_plugin:
-            ret = self.do_release_plugin()
-            print(ret) # FIXME
+            self.do_release_plugin()
         else:
             raise RuntimeError('no command to dispatch')
 
