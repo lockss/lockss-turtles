@@ -53,6 +53,8 @@ def _path(purepath_or_string):
 
 class Plugin(object):
 
+    _cache = dict()
+
     @staticmethod
     def id_to_file(plugid):
         return Path('{}.xml'.format(plugid.replace('.', '/')))
@@ -67,7 +69,11 @@ class Plugin(object):
         self._parsed = ET.parse(path).getroot()
         tag = self._parsed.tag
         if tag != 'map':
-            raise RuntimeError('invalid root element: {}'.format(tag))
+            raise RuntimeError('{}: invalid root element: {}'.format(path, tag))
+        Plugin._cache.setdefault(self.identifier(), self)
+
+    def name(self):
+        return self._only_one('plugin_name')
 
     def identifier(self):
         return self._only_one('plugin_identifier')
@@ -92,7 +98,6 @@ class Plugin(object):
 class PluginRegistry(object):
     
     KIND = 'PluginRegistry'
-    LAYOUT_RCS = 'rcs'
     
     @staticmethod
     def from_path(path):
@@ -156,6 +161,7 @@ class RcsPluginRegistry(PluginRegistry):
             self.do_deploy_plugin(plugid, srcpath, self.prod_path(), interactive)
 
     def do_deploy_plugin(self, plugid, srcpath, regpath, interactive=False):
+        plugin = Plugin._cache[plugid]
         filestr = srcpath.name
         dstpath = Path(regpath, filestr)
         do_chcon = (subprocess.run('command -v selinuxenabled && selinuxenabled && command -v chcon', shell=True).returncode == 0)
@@ -172,9 +178,9 @@ class RcsPluginRegistry(PluginRegistry):
         if do_chcon:
             cmd = ['chcon', '-t', 'httpd_sys_content_t', filestr]
             subprocess.run(cmd, check=True, cwd=str(regpath))
-        cmd = ['ci', '-u', '-m{}'.format('FIXMEVERSION')]
+        cmd = ['ci', '-u', '-mVersion {}'.format(plugin.version())]
         if is_new:
-            cmd.append(['-t-{}'.format('FIXMEDESCR'), filestr]) 
+            cmd.append('-t-{}'.format(plugin.name())) 
         cmd.append(filestr)
         subprocess.run(cmd, check=True, cwd=str(regpath))
         
@@ -237,7 +243,6 @@ class AntPluginSet(PluginSet):
     def __init__(self, parsed, path):
         super().__init__(parsed)
         self._root = path.parent
-        self._cache = dict()
         
     def build_plugin(self, plugid, keystore, alias, password=None):
         # Get all directories for jarplugin -d
@@ -281,11 +286,7 @@ class AntPluginSet(PluginSet):
         return self.root_path().joinpath(self.main())
         
     def make_plugin(self, plugid):
-        ret = self._cache.get(plugid)
-        if ret is None:
-            ret = Plugin(self._plugin_path(plugid))
-            self._cache[plugid] = ret
-        return ret
+        return Plugin._cache.get(plugid) or Plugin(self._plugin_path(plugid))
         
     def root(self):
         return self._root
