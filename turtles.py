@@ -272,12 +272,12 @@ class AntPluginSet(PluginSet):
         if password is not None:
             cmd.extend(['--password', password])
         subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
-        if not plugjar.exists():
+        if not plugjar.is_file():
             raise FileNotFoundError(str(plugjar))
         return plugjar
 
     def has_plugin(self, plugid):
-        return self._plugin_path(plugid).exists()
+        return self._plugin_path(plugid).is_file()
         
     def main(self):
         return self._parsed.get('main', 'plugins/src')
@@ -507,7 +507,7 @@ class Turtles(object):
 
     def select_config_file(self, filename):
         for x in self.config_files(filename):
-            if x.exists():
+            if x.is_file():
                 return x
         else:
             return None
