@@ -305,12 +305,20 @@ class AntPluginSet(PluginSet):
 
 class Turtles(object):
     
-    XDG_DIR='turtles'
-    CONFIG_DIR=xdg.xdg_config_home().joinpath(XDG_DIR)
-    SETTINGS=CONFIG_DIR.joinpath('settings.yaml')
+    XDG_NAME='turtles'
+    XDG_CONFIG_DIR=xdg.xdg_config_home().joinpath(XDG_NAME)
+    GLOBAL_CONFIG_DIR=Path('/etc', XDG_NAME)
+    CONFIG_DIRS=[XDG_CONFIG_DIR, GLOBAL_CONFIG_DIR]
+
+    PLUGIN_REGISTRIES='plugin-registries.yaml'
+    PLUGIN_SETS='plugin-sets.yaml'
+    SETTINGS='settings.yaml'
 
     def __init__(self):
         super().__init__()
+
+    def config_files(self, filename):
+        return [Path(base, filename) for base in Turtles.CONFIG_DIRS]
 
     def do_build_plugin(self, plugid):
         for plugin_set in self.plugin_sets:
@@ -356,6 +364,7 @@ class Turtles(object):
     def initialize(self):
         parser = self.make_parser()
         args = parser.parse_args()
+
         #
         # One-and-done block
         #
@@ -370,6 +379,7 @@ class Turtles(object):
             parser.print_usage()
             parser.exit()
         # --version is automatic
+        
         #
         # --release-plugin block
         #
@@ -388,12 +398,19 @@ class Turtles(object):
             self.production = args.production
             # --password -> _password
             self._password = args.password or getpass.getpass('Plugin signing keystore password: ')
+
         #
         # Configuration block
         #
-        # --settings -> settings_path
+        # --interactive/--non-interactive -> interactive
         self.interactive = args.interactive
-        self.settings_path = args.settings
+        # --plugin-registries -> plugin_registries_path
+        self.plugin_registries_path = args.plugin_registries or self.select_config_file(Turtles.PLUGIN_REGISTRIES)
+        # --plugin-sets -> plugin_sets_path
+        self.plugin_sets_path = args.plugin_sets or self.select_config_file(Turtles.PLUGIN_SETS)
+        # --settings -> settings_path
+        self.settings_path = args.settings or self.select_config_file(Turtles.SETTINGS)
+        
         #
         # Internal: settings, plugin_sets
         #
@@ -401,30 +418,52 @@ class Turtles(object):
         self.plugin_sets = None
         self.plugin_registries = None
 
+    def list_config_files(self, filename):
+        return ' or '.join(str(x) for x in self.config_files(filename))
+
     def load_plugin_registries(self):
         if self.plugin_registries is None:
-            if 'plugin-registries' not in self.settings:
-                sys.exit('error: plugin-registries must be set in your settings')
+            parsed = None
+            with self.plugin_registries_path.open('r') as f:
+                parsed = yaml.safe_load(f)
+            kind = parsed.get('kind')
+            if kind is None:
+                sys.exit('{}: undefined kind'.format(self.plugin_registries_path))
+            elif kind != 'Settings':
+                sys.exit('{}: not of kind Settings: {}'.format(self.plugin_registries_path, kind))
+            paths = parsed.get('plugin-registries')
+            if paths is None:
+                sys.exit('{}: undefined plugin-registries'.format(self.plugin_registries_path))
             self.plugin_registries = list()
-            for path in self.settings['plugin-registries']:
+            for path in paths:
                 self.plugin_registries.extend(PluginRegistry.from_path(path))
 
     def load_plugin_sets(self):
         if self.plugin_sets is None:
-            if 'plugin-sets' not in self.settings:
-                sys.exit('error: plugin-sets must be set in your settings')
+            parsed = None
+            with self.plugin_sets_path.open('r') as f:
+                parsed = yaml.safe_load(f)
+            kind = parsed.get('kind')
+            if kind is None:
+                sys.exit('{}: undefined kind'.format(self.plugin_sets_path))
+            elif kind != 'Settings':
+                sys.exit('{}: not of kind Settings: {}'.format(self.plugin_sets_path, kind))
+            paths = parsed.get('plugin-sets')
+            if paths is None:
+                sys.exit('{}: undefined plugin-sets'.format(self.plugin_sets_path))
             self.plugin_sets = list()
-            for path in self.settings['plugin-sets']:
+            for path in paths:
                 self.plugin_sets.extend(PluginSet.from_path(path))
 
     def load_settings(self):
-        with self.settings_path.open('r') as s:
-            self.settings = yaml.safe_load(s)
+        if self.settings is None:
+            with self.settings_path.open('r') as f:
+                self.settings = yaml.safe_load(f)
             kind = self.settings.get('kind')
             if kind is None:
                 sys.exit('{}: undefined kind'.format(self.settings_path))
             elif kind != 'Settings':
-                sys.exit('{}: unknown kind: {}'.format(self.settings_path, kind))
+                sys.exit('{}: not of kind Settings: {}'.format(self.settings_path, kind))
 
     def make_parser(self):
         # Make parser
@@ -452,7 +491,9 @@ class Turtles(object):
         mutexgroup = group.add_mutually_exclusive_group()
         mutexgroup.add_argument('--interactive', '-i', action='store_true', help='enable interactive prompts (default: --non-interactive)')
         mutexgroup.add_argument('--non-interactive', '-n', dest='interactive', action='store_const', const=False, help='disallow interactive prompts (default)')
-        group.add_argument('--settings', metavar='FILE', type=Path, default=Turtles.SETTINGS, help='load settings from %(metavar)s (default: %(default)s)')
+        group.add_argument('--plugin-registries', metavar='FILE', type=Path, help='load plugin registries from %(metavar)s (default: {})'.format(self.list_config_files(Turtles.PLUGIN_REGISTRIES)))
+        group.add_argument('--plugin-sets', metavar='FILE', type=Path, help='load plugin sets from %(metavar)s (default: {})'.format(self.list_config_files(Turtles.PLUGIN_SETS)))
+        group.add_argument('--settings', metavar='FILE', type=Path, help='load settings from %(metavar)s (default: {})'.format(self.list_config_files(Turtles.SETTINGS)))
         # Return parser
         return parser
 
@@ -463,6 +504,13 @@ class Turtles(object):
             self.do_release_plugin()
         else:
             raise RuntimeError('no command to dispatch')
+
+    def select_config_file(self, filename):
+        for x in self.config_files(filename):
+            if x.exists():
+                return x
+        else:
+            return None
 
 #
 # Main entry point
