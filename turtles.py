@@ -66,7 +66,7 @@ class Plugin(object):
 
     @staticmethod
     def id_to_file(plugid):
-        return Path('{}.xml'.format(plugid.replace('.', '/')))
+        return Path(f'{plugid.replace(".", "/")}.xml')
 
     def __init__(self, path):
         super().__init__()
@@ -74,7 +74,7 @@ class Plugin(object):
         self._parsed = ET.parse(path).getroot()
         tag = self._parsed.tag
         if tag != 'map':
-            raise RuntimeError('{}: invalid root element: {}'.format(path, tag))
+            raise RuntimeError(f'{path}: invalid root element: {tag}')
         Plugin._cache.setdefault(self.identifier(), self)
 
     def name(self):
@@ -97,7 +97,7 @@ class Plugin(object):
         if lst is None or len(lst) < 1:
             return None
         if len(lst) > 1:
-            raise ValueError('plugin declares {} entries for {}'.format(len(lst), key))
+            raise ValueError(f'plugin declares {len(lst)} entries for {key}')
         return result(lst[0])
 
 class PluginRegistry(object):
@@ -114,16 +114,16 @@ class PluginRegistry(object):
     def from_yaml(parsed, path):
         kind = parsed.get('kind')
         if kind is None:
-            raise RuntimeError('{}: kind is not defined'.format(path)) 
+            raise RuntimeError(f'{path}: kind is not defined') 
         elif kind != PluginRegistry.KIND:
-            raise RuntimeError('{}: not of kind {}: {}'.format(path, PluginRegistry.KIND, kind))
+            raise RuntimeError(f'{path}: not of kind {PluginRegistry.KIND}: {kind}')
         layout = parsed.get('layout')
         if layout is None:
-            raise RuntimeError('{}: layout is not defined'.format(path))
+            raise RuntimeError(f'{path}: layout is not defined')
         elif layout == RcsPluginRegistry.LAYOUT:
             return RcsPluginRegistry(parsed)
         else:
-            raise RuntimeError('{}: unknown layout: {}'.format(path, layout))
+            raise RuntimeError(f'{path}: unknown layout: {layout}')
 
     def __init__(self, parsed):
         super().__init__()
@@ -175,7 +175,7 @@ class RcsPluginRegistry(PluginRegistry):
         is_new = not dstpath.exists()
         if is_new:
             if interactive:
-                i = input('{} does not exist in {}; create it (y/n)? [n] '.format(dstpath, self.name())).lower() or 'n'
+                i = input(f'{dstpath} does not exist in {self.name()}; create it (y/n)? [n] ').lower() or 'n'
                 if i != 'y':
                     return
         else:
@@ -185,9 +185,9 @@ class RcsPluginRegistry(PluginRegistry):
         if do_chcon:
             cmd = ['chcon', '-t', 'httpd_sys_content_t', filestr]
             subprocess.run(cmd, check=True, cwd=str(regpath))
-        cmd = ['ci', '-u', '-mVersion {}'.format(plugin.version())]
+        cmd = ['ci', '-u', f'-mVersion {plugin.version()}']
         if is_new:
-            cmd.append('-t-{}'.format(plugin.name())) 
+            cmd.append(f'-t-{plugin.name()}') 
         cmd.append(filestr)
         subprocess.run(cmd, check=True, cwd=str(regpath))
         return dstpath
@@ -206,21 +206,21 @@ class PluginSet(object):
     def from_yaml(parsed, path):
         kind = parsed.get('kind')
         if kind is None:
-            raise RuntimeError('{}: kind is not defined'.format(path)) 
+            raise RuntimeError(f'{path}: kind is not defined') 
         elif kind != PluginSet.KIND:
-            raise RuntimeError('{}: not of kind {}: {}'.format(path, PluginSet.KIND, kind))
+            raise RuntimeError(f'{path}: not of kind {PluginSet.KIND}: {kind}')
         builder = parsed.get('builder')
         if builder is None:
-            raise RuntimeError('{}: builder is not defined'.format(path))
+            raise RuntimeError(f'{path}: builder is not defined')
         typ = builder.get('type')
         if typ is None:
-            raise RuntimeError('{}: builder type is not defined'.format(path))
+            raise RuntimeError(f'{path}: builder type is not defined')
         elif typ == AntPluginSet.TYPE:
             return AntPluginSet(parsed, path)
         elif typ == 'mvn':
-            raise NotImplementedError('{}: the builder type mvn is not implemented yet')
+            raise NotImplementedError(f'{path}: the builder type mvn is not implemented yet')
         else:
-            raise RuntimeError('{}: unknown builder type: {}'.format(path, typ))
+            raise RuntimeError(f'{path}: unknown builder type: {typ}')
 
     def __init__(self, parsed):
         super().__init__()
@@ -267,7 +267,7 @@ class AntPluginSet(PluginSet):
         dirs = [str(i).replace('.', '/') for i in dirs]
         # Invoke jarplugin
         plugfile = Plugin.id_to_file(plugid)
-        plugjar = self.root_path().joinpath('plugins/jars', '{}.jar'.format(plugfile.stem))
+        plugjar = self.root_path().joinpath('plugins/jars', f'{plugfile.stem}.jar')
         plugjar.parent.mkdir(parents=True, exist_ok=True)
         cmd = ['test/scripts/jarplugin',
                '-j', str(plugjar),
@@ -342,7 +342,7 @@ class Turtles(object):
                                               self.get_plugin_signing_alias(),
                                               self.get_plugin_signing_password())
         else:
-            sys.exit('error: {} not found in any plugin set'.format(plugid))
+            sys.exit(f'error: {plugid} not found in any plugin set')
 
     def do_build_plugin(self):
         self.load_settings()
@@ -361,7 +361,7 @@ class Turtles(object):
                 plugid = Plugin.file_to_id(entry['Name'])
                 break
         else:
-            sys.exit('error: {}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF'.format(jarpath))
+            sys.exit(f'error: {jarpath}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF')
         paths = list()
         for plugin_registry in self.plugin_registries:
             if plugin_registry.has_plugin(plugid):
@@ -369,9 +369,9 @@ class Turtles(object):
                                                            jarpath,
                                                            testing=self.testing,
                                                            production=self.production,
-                                                           interactive=False)) ###FIXME
+                                                           interactive=False))
         if len(paths) == 0:
-            sys.exit('error: {}: {} is not declared in any plugin registry'.format(jarpath, plugid))
+            sys.exit(f'error: {jarpath}: {plugid} is not declared in any plugin registry')
         return paths
 
     def do_deploy_plugin(self):
@@ -482,12 +482,12 @@ class Turtles(object):
                 parsed = yaml.safe_load(f)
             kind = parsed.get('kind')
             if kind is None:
-                sys.exit('{}: undefined kind'.format(self.plugin_registries_path))
+                sys.exit(f'{self.plugin_registries_path}: kind is not defined')
             elif kind != 'Settings':
-                sys.exit('{}: not of kind Settings: {}'.format(self.plugin_registries_path, kind))
+                sys.exit(f'{self.plugin_registries_path}: not of kind Settings: {kind}')
             paths = parsed.get('plugin-registries')
             if paths is None:
-                sys.exit('{}: undefined plugin-registries'.format(self.plugin_registries_path))
+                sys.exit(f'{self.plugin_registries_path}: undefined plugin-registries')
             self.plugin_registries = list()
             for path in paths:
                 self.plugin_registries.extend(PluginRegistry.from_path(path))
@@ -499,12 +499,12 @@ class Turtles(object):
                 parsed = yaml.safe_load(f)
             kind = parsed.get('kind')
             if kind is None:
-                sys.exit('{}: undefined kind'.format(self.plugin_sets_path))
+                sys.exit(f'{self.plugin_sets_path}: kind is not defined')
             elif kind != 'Settings':
-                sys.exit('{}: not of kind Settings: {}'.format(self.plugin_sets_path, kind))
+                sys.exit(f'{self.plugin_sets_path}: not of kind Settings: {kind}')
             paths = parsed.get('plugin-sets')
             if paths is None:
-                sys.exit('{}: undefined plugin-sets'.format(self.plugin_sets_path))
+                sys.exit(f'{self.plugin_sets_path}: plugin-sets is not defined')
             self.plugin_sets = list()
             for path in paths:
                 self.plugin_sets.extend(PluginSet.from_path(path))
@@ -518,9 +518,9 @@ class Turtles(object):
                 self.settings = yaml.safe_load(f)
             kind = self.settings.get('kind')
             if kind is None:
-                sys.exit('{}: undefined kind'.format(self.settings_path))
+                sys.exit(f'{self.settings_path}: kind is not defined')
             elif kind != 'Settings':
-                sys.exit('{}: not of kind Settings: {}'.format(self.settings_path, kind))
+                sys.exit(f'{self.settings_path}: not of kind Settings: {kind}')
 
     def make_parser(self):
         # Make parser
@@ -554,9 +554,9 @@ class Turtles(object):
         m4a = g4.add_mutually_exclusive_group()
         m4a.add_argument('--interactive', '-i', action='store_true', help='enable interactive prompts (default: --non-interactive)')
         m4a.add_argument('--non-interactive', '-n', dest='interactive', action='store_const', const=False, help='disallow interactive prompts (default)')
-        g4.add_argument('--plugin-registries', metavar='FILE', type=Path, help='load plugin registries from %(metavar)s (default: {})'.format(self.list_config_files(Turtles.PLUGIN_REGISTRIES)))
-        g4.add_argument('--plugin-sets', metavar='FILE', type=Path, help='load plugin sets from %(metavar)s (default: {})'.format(self.list_config_files(Turtles.PLUGIN_SETS)))
-        g4.add_argument('--settings', metavar='FILE', type=Path, help='load settings from %(metavar)s (default: {})'.format(self.list_config_files(Turtles.SETTINGS)))
+        g4.add_argument('--plugin-registries', metavar='FILE', type=Path, help=f'load plugin registries from %(metavar)s (default: {self.list_config_files(Turtles.PLUGIN_REGISTRIES)})')
+        g4.add_argument('--plugin-sets', metavar='FILE', type=Path, help=f'load plugin sets from %(metavar)s (default: {self.list_config_files(Turtles.PLUGIN_SETS)})')
+        g4.add_argument('--settings', metavar='FILE', type=Path, help=f'load settings from %(metavar)s (default: {self.list_config_files(Turtles.SETTINGS)})')
         # Return parser
         return parser
 
@@ -583,5 +583,8 @@ class Turtles(object):
 # Main entry point
 #
 
-if __name__ == '__main__': Turtles().run()
+if __name__ == '__main__':
+    if sys.version_info < (3, 6):
+        sys.exit('Requires Python 3.6 or greater; currently {}'.format(sys.version))
+    Turtles().run()
 
