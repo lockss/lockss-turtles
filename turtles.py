@@ -45,6 +45,7 @@ import sys
 import xdg
 import xml.etree.ElementTree as ET
 import yaml
+import zipfile
 
 def _path(purepath_or_string):
     if issubclass(type(purepath_or_string), PurePath):
@@ -54,11 +55,34 @@ def _path(purepath_or_string):
 
 class Plugin(object):
 
-    _cache = dict()
+    @staticmethod
+    def from_jar(jarpath):
+        jarpath = _path(jarpath) # in case it's a string
+        plugid = Plugin.id_from_jar(jarpath)
+        plugfile = str(Plugin.id_to_file(plugid))
+        with zipfile.ZipFile(jarpath, 'r') as zf:
+            with zf.open(plugfile, 'r') as mf:
+                return Plugin(mf, zipfile.Path(zf, plugfile))
+
+    @staticmethod
+    def from_path(filepath):
+        filepath = _path(filepath) # in case it's a string
+        with open(filepath, 'r') as f:
+            return Plugin(f, filepath)
 
     @staticmethod
     def file_to_id(filepath):
         return filepath.replace('/', '.')[:-4] # for .xml
+
+    @staticmethod
+    def id_from_jar(jarpath):
+        jarpath = _path(jarpath) # in case it's a string
+        manifest = java_manifest.from_jar(jarpath)
+        for entry in manifest:
+            if entry.get('Lockss-Plugin') == 'true':
+                return Plugin.file_to_id(entry['Name'])
+        else:
+            raise RuntimeException(f'error: {jarpath!s}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF')
 
     @staticmethod
     def id_to_dir(plugid):
@@ -68,14 +92,13 @@ class Plugin(object):
     def id_to_file(plugid):
         return Path(f'{plugid.replace(".", "/")}.xml')
 
-    def __init__(self, path):
+    def __init__(self, f, path):
         super().__init__()
         self._path = path
-        self._parsed = ET.parse(path).getroot()
+        self._parsed = ET.parse(f).getroot()
         tag = self._parsed.tag
         if tag != 'map':
-            raise RuntimeError(f'{path}: invalid root element: {tag}')
-        Plugin._cache.setdefault(self.identifier(), self)
+            raise RuntimeError(f'{path!s}: invalid root element: {tag}')
 
     def name(self):
         return self._only_one('plugin_name')
@@ -157,19 +180,19 @@ class RcsPluginRegistry(PluginRegistry):
     def __init__(self, parsed):
         super().__init__(parsed)
 
-    def deploy_plugin(self, plugid, srcpath, testing=False, production=False, interactive=False):
+    def deploy_plugin(self, plugid, jarpath, testing=False, production=False, interactive=False):
         if not (testing or production):
             raise RuntimeError('must deploy to at least one of testing or production')
         ret = list()
         if testing:
-            ret.append(self.do_deploy_plugin(plugid, srcpath, self.test_path(), interactive))
+            ret.append(self.do_deploy_plugin(plugid, jarpath, self.test_path(), interactive))
         if production:
-            ret.append(self.do_deploy_plugin(plugid, srcpath, self.prod_path(), interactive))
+            ret.append(self.do_deploy_plugin(plugid, jarpath, self.prod_path(), interactive))
         return ret
 
-    def do_deploy_plugin(self, plugid, srcpath, regpath, interactive=False):
-        plugin = Plugin._cache[plugid]
-        filestr = srcpath.name
+    def do_deploy_plugin(self, plugid, jarpath, regpath, interactive=False):
+        plugin = Plugin.from_jar(jarpath)
+        filestr = jarpath.name
         dstpath = Path(regpath, filestr)
         do_chcon = (subprocess.run('command -v selinuxenabled && selinuxenabled && command -v chcon', shell=True).returncode == 0)
         is_new = not dstpath.exists()
@@ -181,7 +204,7 @@ class RcsPluginRegistry(PluginRegistry):
         else:
             cmd = ['co', '-l', filestr]
             subprocess.run(cmd, check=True, cwd=str(regpath))
-        shutil.copy(str(srcpath), str(dstpath))
+        shutil.copy(str(jarpath), str(dstpath))
         if do_chcon:
             cmd = ['chcon', '-t', 'httpd_sys_content_t', filestr]
             subprocess.run(cmd, check=True, cwd=str(regpath))
@@ -297,7 +320,7 @@ class AntPluginSet(PluginSet):
         return self.root_path().joinpath(self.main())
         
     def make_plugin(self, plugid):
-        return Plugin._cache.get(plugid) or Plugin(self._plugin_path(plugid))
+        return Plugin.from_path(self._plugin_path(plugid))
         
     def root(self):
         return self._root
@@ -354,13 +377,9 @@ class Turtles(object):
         return ret
 
     def do_deploy_one_plugin(self, jarpath):
-        # Get plugin identifier
-        man = java_manifest.from_jar(jarpath)
-        for entry in man:
-            if entry.get('Lockss-Plugin') == 'true':
-                plugid = Plugin.file_to_id(entry['Name'])
-                break
-        else:
+        try:
+            plugid = Plugin.id_from_jar(jarpath)
+        except RuntimeException as e:
             sys.exit(f'error: {jarpath}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF')
         paths = list()
         for plugin_registry in self.plugin_registries:
