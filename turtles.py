@@ -260,6 +260,9 @@ class PluginSet(object):
     def has_plugin(self, plugid):
         raise NotImplementedError('has_plugin')
         
+    def id(self):
+        return self._parsed['id']
+    
     def make_plugin(self, plugid):
         raise NotImplementedError('make_plugin')
 
@@ -296,7 +299,7 @@ class AntPluginSet(PluginSet):
         plugjar.parent.mkdir(parents=True, exist_ok=True)
         cmd = ['test/scripts/jarplugin',
                '-j', str(plugjar),
-                '-p', str(plugfile)]
+               '-p', str(plugfile)]
         for dir in dirs:
             cmd.extend(['-d', dir])
         subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
