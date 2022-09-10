@@ -158,6 +158,9 @@ class PluginRegistry(object):
     def has_plugin(self, plugid):
         return plugid in self.plugin_identifiers()
         
+    def id(self):
+        return self._parsed['id']
+    
     def layout(self):
         return self._parsed['layout']
     
@@ -197,7 +200,7 @@ class RcsPluginRegistry(PluginRegistry):
         do_chcon = (subprocess.run('command -v selinuxenabled && selinuxenabled && command -v chcon', shell=True).returncode == 0)
         if not dstpath.exists():
             if interactive:
-                i = input(f'{dstpath} does not exist in {self.name()}; create it (y/n)? [n] ').lower() or 'n'
+                i = input(f'{dstpath} does not exist in {self.name()} (self.id()); create it (y/n)? [n] ').lower() or 'n'
                 if i != 'y':
                     return
         else:
@@ -264,7 +267,7 @@ class PluginSet(object):
         return self._parsed['name']
     
 #
-# class _AntPluginSet
+# class AntPluginSet
 #
 class AntPluginSet(PluginSet):
 
