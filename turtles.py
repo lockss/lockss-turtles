@@ -195,24 +195,23 @@ class RcsPluginRegistry(PluginRegistry):
         filestr = jarpath.name
         dstpath = Path(regpath, filestr)
         do_chcon = (subprocess.run('command -v selinuxenabled && selinuxenabled && command -v chcon', shell=True).returncode == 0)
-        is_new = not dstpath.exists()
-        if is_new:
+        if not dstpath.exists():
             if interactive:
                 i = input(f'{dstpath} does not exist in {self.name()}; create it (y/n)? [n] ').lower() or 'n'
                 if i != 'y':
                     return
         else:
             cmd = ['co', '-l', filestr]
-            subprocess.run(cmd, check=True, cwd=str(regpath))
+            subprocess.run(cmd, check=True, cwd=regpath)
         shutil.copy(str(jarpath), str(dstpath))
         if do_chcon:
             cmd = ['chcon', '-t', 'httpd_sys_content_t', filestr]
-            subprocess.run(cmd, check=True, cwd=str(regpath))
+            subprocess.run(cmd, check=True, cwd=regpath)
         cmd = ['ci', '-u', f'-mVersion {plugin.version()}']
-        if is_new:
+        if not regpath.joinpath('RCS', f'{filestr},v').is_file():
             cmd.append(f'-t-{plugin.name()}') 
         cmd.append(filestr)
-        subprocess.run(cmd, check=True, cwd=str(regpath))
+        subprocess.run(cmd, check=True, cwd=regpath)
         return dstpath
         
 class PluginSet(object):
