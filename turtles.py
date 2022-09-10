@@ -62,7 +62,7 @@ class Plugin(object):
         plugfile = str(Plugin.id_to_file(plugid))
         with zipfile.ZipFile(jarpath, 'r') as zf:
             with zf.open(plugfile, 'r') as mf:
-                return Plugin(mf, zipfile.Path(zf, plugfile))
+                return Plugin(mf, plugfile)
 
     @staticmethod
     def from_path(filepath):
