@@ -47,6 +47,10 @@ import xml.etree.ElementTree as ET
 import yaml
 import zipfile
 
+def _file_lines(path):
+    with sys.stdin if path == '-' else open(_path(path), 'r') as f:
+        return [line for line in [line.partition('#')[0].strip() for line in f] if len(line) > 0]
+
 def _path(purepath_or_string):
     if issubclass(type(purepath_or_string), PurePath):
         return purepath_or_string
@@ -469,6 +473,8 @@ class Turtles(object):
         #
         if self.build_plugin or self.release_plugin:
             self.plugin_identifiers = args.plugin_identifier
+            for path in args.plugin_identifiers:
+                self.plugin_identifiers.extend(_file_lines(path))
             if len(self.plugin_identifiers) == 0:
                 parser.error('list of plugin identifiers to build is empty')
             self._password = args.password 
@@ -481,8 +487,10 @@ class Turtles(object):
             self.production = args.production
             if self.deploy_plugin:
                 self.plugin_jars = args.plugin_jar
+                for path in args.plugin_jars:
+                    self.plugin_jars.extend(_file_lines(path))
                 if len(self.plugin_jars) == 0:
-                    parser.error('list of plugin JARs to build is empty')
+                    parser.error('list of plugin JARs to deploy is empty')
             elif self.release_plugin:
                 self.plugin_jars = None
             else:
@@ -568,9 +576,11 @@ class Turtles(object):
         g2 = parser.add_argument_group('Plugin build options (--build-plugin, --release-plugin)')
         g2.add_argument('--password', metavar='PASS', help='use %(metavar)s as the plugin signing keystore password (default: interactive prompt)')
         g2.add_argument('--plugin-identifier', metavar='PLUG', action='append', help='add %(metavar)s to the list of plugin identifiers to build')
+        g2.add_argument('--plugin-identifiers', metavar='FILE', action='append', help='add the plugin identifiers in %(metavar)s to the list of plugin identifiers to build')
         # Plugin deployment options (--deploy-plugin)
         g3 = parser.add_argument_group('Plugin deployment options (--deploy-plugin, --release-plugin)')
         g3.add_argument('--plugin-jar', metavar='JAR', type=Path, action='append', help='(--deploy-plugin only) add %(metavar)s to the list of plugin JARs to deploy')
+        g3.add_argument('--plugin-jars', metavar='FILE', action='append', help='(--deploy-plugin only) add the plugin JARs in %(metavar)s to the list of plugin JARs to deploy')
         g3.add_argument('--production', '-p', action='store_true', help="deploy to the registry's production directory")
         g3.add_argument('--testing', '-t', action='store_true', help="deploy to the registry's testing directory")
         # Config group
