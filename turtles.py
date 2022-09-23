@@ -48,8 +48,12 @@ import yaml
 import zipfile
 
 def _file_lines(path):
-    with sys.stdin if path == '-' else open(_path(path), 'r') as f:
+    try:
+        f = open(_path(path), 'r') if path != '-' else sys.stdin 
         return [line for line in [line.partition('#')[0].strip() for line in f] if len(line) > 0]
+    finally:
+        if path != '-':
+            f.close() 
 
 def _path(purepath_or_string):
     if issubclass(type(purepath_or_string), PurePath):
