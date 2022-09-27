@@ -47,6 +47,8 @@ import xml.etree.ElementTree as ET
 import yaml
 import zipfile
 
+PROG = 'turtles'
+
 def _file_lines(path):
     try:
         f = open(_path(path), 'r') if path != '-' else sys.stdin 
@@ -352,211 +354,117 @@ class AntPluginSet(PluginSet):
 
 class Turtles(object):
     
-    XDG_NAME='turtles'
-    XDG_CONFIG_DIR=xdg.xdg_config_home().joinpath(XDG_NAME)
-    GLOBAL_CONFIG_DIR=Path('/etc', XDG_NAME)
-    CONFIG_DIRS=[XDG_CONFIG_DIR, GLOBAL_CONFIG_DIR]
-
-    PLUGIN_REGISTRIES='plugin-registries.yaml'
-    PLUGIN_SETS='plugin-sets.yaml'
-    SETTINGS='settings.yaml'
-
     def __init__(self):
         super().__init__()
-        self.settings = None
-        self.plugin_sets = None
-        self.plugin_registries = None
+        self._settings = dict()
+        self._plugin_sets = list()
+        self._plugin_registries = list()
 
-    def config_files(self, filename):
-        return [Path(base, filename) for base in Turtles.CONFIG_DIRS]
+    def build_plugin(self, plugids):
+        return {plugid: self._build_one_plugin(plugid) for plugid in plugids}
 
-    def do_build_one_plugin(self, plugid):
-        for plugin_set in self.plugin_sets:
-           if plugin_set.has_plugin(plugid):
-               return plugin_set.build_plugin(plugid,
-                                              self.get_plugin_signing_keystore(),
-                                              self.get_plugin_signing_alias(),
-                                              self.get_plugin_signing_password())
+    def deploy_plugin(self, plugjars, testing=False, production=False):
+        return {jarpath: self._deploy_one_plugin(jarpath, testing=testing, production=production) for jarpath in plugjars}
+
+    def release_plugin(self, plugids, testing=False, production=False):
+        ret1 = self.build_plugin(plugids)
+        plugjars = [ret1.values()]
+        ret2 = self._deploy_plugin(plugjars, testing=testing, production=production)
+        return {plugid: ret2[ret1[plugid]] for plugid in ret1.keys()}
+
+    def load_plugin_registries(self, path):
+        path = _path(path)
+        parsed = None
+        with path.open('r') as f:
+            parsed = yaml.safe_load(f)
+        kind = parsed.get('kind')
+        if kind is None:
+            raise Exception(f'{path!s}: kind is not defined')
+        elif kind != 'Settings':
+            raise Exception(f'{path!s}: not of kind Settings: {kind}')
+        paths = parsed.get('plugin-registries')
+        if paths is None:
+            raise Exception(f'{path!s}: undefined plugin-registries')
+        self._plugin_registries = list()
+        for p in paths:
+            self._plugin_registries.extend(PluginRegistry.from_path(p))
+
+    def load_plugin_sets(self, path):
+        path = _path(path)
+        parsed = None
+        with path.open('r') as f:
+            parsed = yaml.safe_load(f)
+        kind = parsed.get('kind')
+        if kind is None:
+            raise Exception(f'{path!s}: kind is not defined')
+        elif kind != 'Settings':
+            raise Exception(f'{path!s}: not of kind Settings: {kind}')
+        paths = parsed.get('plugin-sets')
+        if paths is None:
+            raise Exception(f'{path!s}: plugin-sets is not defined')
+        self.plugin_sets = list()
+        for p in paths:
+            self._plugin_sets.extend(PluginSet.from_path(p))
+
+    def load_settings(self, path):
+        path = _path(path)
+        with path.open('r') as f:
+            parsed = yaml.safe_load(f)
+        kind = parsed.get('kind')
+        if kind is None:
+            raise Exception(f'{path!s}: kind is not defined')
+        elif kind != 'Settings':
+            raise Exception(f'{path!s}: not of kind Settings: {kind}')
+        self._settings = parsed
+
+    def _build_one_plugin(self, plugid):
+        for plugin_set in self._plugin_sets:
+            if plugin_set.has_plugin(plugid):
+                return plugin_set.build_plugin(plugid,
+                                               self._get_plugin_signing_keystore(),
+                                               self._get_plugin_signing_alias(),
+                                               self._get_plugin_signing_password())
         else:
-            sys.exit(f'error: {plugid} not found in any plugin set')
+            raise Exception(f'{plugid}: not found in any plugin set')
 
-    def do_build_plugin(self):
-        self.load_settings()
-        self.load_plugin_sets()
-        ret = [self.do_build_one_plugin(plugid) for plugid in self.plugin_identifiers]
-        if self.build_plugin:
-            for path in ret:
-                print(path)
-        return ret
-
-    def do_deploy_one_plugin(self, jarpath):
+    def _deploy_one_plugin(self, jarpath, testing=False, production=False):
         try:
             plugid = Plugin.id_from_jar(jarpath)
         except RuntimeException as e:
-            sys.exit(f'error: {jarpath}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF')
+            raise Exception(f'{jarpath}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF')
         paths = list()
         for plugin_registry in self.plugin_registries:
             if plugin_registry.has_plugin(plugid):
                 paths.extend(plugin_registry.deploy_plugin(plugid,
                                                            jarpath,
-                                                           testing=self.testing,
-                                                           production=self.production,
+                                                           testing=testing,
+                                                           production=production,
                                                            interactive=False))
         if len(paths) == 0:
-            sys.exit(f'error: {jarpath}: {plugid} is not declared in any plugin registry')
+            raise Exception(f'{jarpath}: {plugid} not declared in any plugin registry')
         return paths
 
-    def do_deploy_plugin(self):
-        self.load_plugin_registries()
-        ret = list()
-        for jarpath in self.plugin_jars:
-            ret.extend(self.do_deploy_one_plugin(jarpath))
-        if self.deploy_plugin:
-            for path in ret:
-                print(path)
-        return ret
-
-    def do_release_plugin(self):
-        self.plugin_jars = self.do_build_plugin()
-        ret = self.do_deploy_plugin()
-        if self.release_plugin:
-            for path in ret:
-                print(path)
-        return ret
-
-    def get_plugin_signing_alias(self):
-        self.load_settings()
-        ret = self.settings.get('plugin-signing-alias')
+    def _get_plugin_signing_alias(self):
+        ret = self._settings.get('plugin-signing-alias')
         if ret is None:
-            sys.exit('error: plugin-signing-alias is not defined in your settings')
+            raise Exception('plugin-signing-alias is not defined in the settings')
         return ret
 
-    def get_plugin_signing_keystore(self):
-        self.load_settings()
-        ret = self.settings.get('plugin-signing-keystore')
+    def _get_plugin_signing_keystore(self):
+        ret = self._settings.get('plugin-signing-keystore')
         if ret is None:
-            sys.exit('error: plugin-signing-keystore is not defined in your settings')
+            raise Exception('plugin-signing-keystore is not defined in the settings')
         return _path(ret)
 
-    def get_plugin_signing_password(self):
+    def _get_plugin_signing_password(self):
         if self._password is None:
             if self.interactive:
                 self._password = getpass.getpass('Plugin signing password: ')
             else:
-                sys.exit('error: plugin signing password is not set')
+                raise Exception('plugin signing password is not set')
         return self._password
 
-    def initialize(self):
-        parser = self.make_parser()
-        args = parser.parse_args()
-
-        #
-        # One-and-done block
-        #
-        if args.copyright:
-            print(__copyright__)
-            parser.exit()
-        # --help is automatic
-        if args.license:
-            print(__license__)
-            parser.exit()
-        if args.usage:
-            parser.print_usage()
-            parser.exit()
-        # --version is automatic
-        
-        #
-        # --build-plugin, --deploy-plugin, --release-plugin
-        #
-        self.build_plugin = args.build_plugin
-        self.deploy_plugin = args.deploy_plugin
-        self.release_plugin = args.release_plugin
-
-        #
-        # Plugin build options
-        #
-        if self.build_plugin or self.release_plugin:
-            self.plugin_identifiers = args.plugin_identifier
-            for path in args.plugin_identifiers:
-                self.plugin_identifiers.extend(_file_lines(path))
-            if len(self.plugin_identifiers) == 0:
-                parser.error('list of plugin identifiers to build is empty')
-            self._password = args.password 
-
-        #
-        # Plugin deployment options
-        #
-        if self.deploy_plugin or self.release_plugin:
-            self.testing = args.testing
-            self.production = args.production
-            if self.deploy_plugin:
-                self.plugin_jars = args.plugin_jar
-                for path in args.plugin_jars:
-                    self.plugin_jars.extend(_file_lines(path))
-                if len(self.plugin_jars) == 0:
-                    parser.error('list of plugin JARs to deploy is empty')
-            elif self.release_plugin:
-                self.plugin_jars = None
-            else:
-                raise RuntimeError('internal error')
-
-        #
-        # Configuration options
-        #
-        self.interactive = args.interactive
-        self.plugin_registries_path = args.plugin_registries or self.select_config_file(Turtles.PLUGIN_REGISTRIES)
-        self.plugin_sets_path = args.plugin_sets or self.select_config_file(Turtles.PLUGIN_SETS)
-        self.settings_path = args.settings or self.select_config_file(Turtles.SETTINGS)
-
-    def list_config_files(self, filename):
-        return ' or '.join(str(x) for x in self.config_files(filename))
-
-    def load_plugin_registries(self):
-        if self.plugin_registries is None:
-            parsed = None
-            with self.plugin_registries_path.open('r') as f:
-                parsed = yaml.safe_load(f)
-            kind = parsed.get('kind')
-            if kind is None:
-                sys.exit(f'{self.plugin_registries_path}: kind is not defined')
-            elif kind != 'Settings':
-                sys.exit(f'{self.plugin_registries_path}: not of kind Settings: {kind}')
-            paths = parsed.get('plugin-registries')
-            if paths is None:
-                sys.exit(f'{self.plugin_registries_path}: undefined plugin-registries')
-            self.plugin_registries = list()
-            for path in paths:
-                self.plugin_registries.extend(PluginRegistry.from_path(path))
-
-    def load_plugin_sets(self):
-        if self.plugin_sets is None:
-            parsed = None
-            with self.plugin_sets_path.open('r') as f:
-                parsed = yaml.safe_load(f)
-            kind = parsed.get('kind')
-            if kind is None:
-                sys.exit(f'{self.plugin_sets_path}: kind is not defined')
-            elif kind != 'Settings':
-                sys.exit(f'{self.plugin_sets_path}: not of kind Settings: {kind}')
-            paths = parsed.get('plugin-sets')
-            if paths is None:
-                sys.exit(f'{self.plugin_sets_path}: plugin-sets is not defined')
-            self.plugin_sets = list()
-            for path in paths:
-                self.plugin_sets.extend(PluginSet.from_path(path))
-
-    def load_settings(self):
-        if self.settings is None:
-            if not self.settings_path.is_file():
-                self.settings = dict()
-                return
-            with self.settings_path.open('r') as f:
-                self.settings = yaml.safe_load(f)
-            kind = self.settings.get('kind')
-            if kind is None:
-                sys.exit(f'{self.settings_path}: kind is not defined')
-            elif kind != 'Settings':
-                sys.exit(f'{self.settings_path}: not of kind Settings: {kind}')
+# ----
 
     def make_parser(self):
         # Make parser
@@ -598,24 +506,189 @@ class Turtles(object):
         # Return parser
         return parser
 
-    def run(self):
-        self.initialize()
-        self.load_settings()
-        if self.build_plugin:
-            self.do_build_plugin()
-        elif self.deploy_plugin:
-            self.do_deploy_plugin()
-        elif self.release_plugin:
-            self.do_release_plugin()
-        else:
-            raise RuntimeError('no command to dispatch')
+class TurtlesCli(Turtles):
+    
+    XDG_CONFIG_DIR=xdg.xdg_config_home().joinpath(PROG)
+    GLOBAL_CONFIG_DIR=Path('/etc', PROG)
+    CONFIG_DIRS=[XDG_CONFIG_DIR, GLOBAL_CONFIG_DIR]
 
-    def select_config_file(self, filename):
-        for x in self.config_files(filename):
+    PLUGIN_REGISTRIES='plugin-registries.yaml'
+    PLUGIN_SETS='plugin-sets.yaml'
+    SETTINGS='settings.yaml'
+
+    @staticmethod
+    def _config_files(filename):
+        return [Path(base, filename) for base in TurtlesCli.CONFIG_DIRS]
+
+    @staticmethod
+    def _list_config_files(filename):
+        return ' or '.join(str(x) for x in TurtlesCli._config_files(filename))
+
+    @staticmethod
+    def _select_config_file(filename):
+        for x in TurtlesCli.config_files(filename):
             if x.is_file():
                 return x
+        return None
+
+    def __init__(self):
+        super().__init__()
+        self._args = None
+        self._parser = None
+        self._plugin_identifiers = None
+        self._plugin_jars = None
+        self._subparsers = None
+
+    def run(self):
+        self._make_parser()
+        self._args = self._parser.parse_args()
+        self._dispatch()
+        
+    def _dispatch(self):
+        # --help and --version are automatic
+        if self._args.copyright:
+            self._one_and_done(__copyright__)
+            sys.exit()
+        elif self._args.license:
+            self._one_and_done(__license__)
+            sys.exit()
+        elif self._args.usage:
+            self._parser.print_usage()
+            sys.exit()
+        
+        if self._args.build_plugin:
+            self.load_settings(self._args.settings or TurtlesCli.select_config_file(TurtlesCli.SETTINGS))
+            self.load_plugin_sets(self._args.plugin_sets or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_SETS))
+            ret = self.build_plugin(self._get_plugin_identifiers())
+        elif self._args.deploy_plugin:
+            self.load_plugin_registries(self._args.plugin_registries or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
+            ret = self.deploy_plugin(self._get_plugin_jars())
+        elif self._args.release_plugin:
+            self.load_settings(self._args.settings or TurtlesCli.select_config_file(TurtlesCli.SETTINGS))
+            self.load_plugin_sets(self._args.plugin_sets or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_SETS))
+            self.load_plugin_registries(self._args.plugin_registries or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
+            ret = self.release_plugin(self._get_plugin_identifiers())
         else:
-            return None
+            sys.exit('internal error')
+    
+    def _get_plugin_identifiers(self):
+        if self._plugin_identifiers is None:
+            self._plugin_identifiers = list()
+            self._plugin_identifiers.extend(self._args.remainder)
+            self._plugin_identifiers.extend(self._args.plugin_identifier)
+            for path in self._args.plugin_identifiers:
+                self._plugin_identifiers.extend(_file_lines(path))
+            if len(self._plugin_identifiers) == 0:
+                self._parser.error('list of plugin identifiers to build is empty')
+        return self._plugin_identifiers
+    
+    def _get_plugin_jars(self):
+        if self._plugin_jars is None:
+            self._plugin_jars = list()
+            self._plugin_jars.extend(self._args.remainder)
+            self._plugin_jars.extend(self._args.plugin_jar)
+            for path in self._args.plugin_jars:
+                self._plugin_jars.extend(_file_lines(path))
+            if len(self._plugin_identifiers) == 0:
+                self._parser.error('list of plugin JARs to deploy is empty')
+        return self._plugin_jars
+    
+    def _make_parser(self):
+        self._parser = argparse.ArgumentParser(prog=PROG)
+        self._subparsers = self._parser.add_subparsers(title='commands',
+                                                       metavar='CMD',
+                                                       description="Add --help to see the command's own help message")
+        self._make_parser_main()
+        self._make_parser_build_plugin()
+        self._make_parser_deploy_plugin()
+        self._make_parser_release_plugin()
+
+    def _make_parser_build_plugin(self):
+        parser = self._subparsers.add_parser('build-plugin',
+                                             description='Build plugins',
+                                             help='Build plugins')
+        self._make_options_plugin_identifiers(parser)
+        self._make_options_plugin_sets(parser)
+        self._make_options_settings(parser)
+        
+    def _make_parser_deploy_plugin(self):
+        parser = self._subparsers.add_parser('deploy-plugin',
+                                             description='Deploy plugins',
+                                             help='Deploy plugins')
+        self._make_options_plugin_jars(parser)
+        self._make_options_plugin_registries(parser)
+        self._make_options_testing_production(parser)
+        
+    def _make_parser_main(self):
+        self._parser.add_argument('--copyright', action='store_true', help='show copyright and exit')
+        self._parser.add_argument('--license', action='store_true', help='show license and exit')
+        self._parser.add_argument('--usage', action='store_true', help='show usage information and exit')
+        self._parser.add_argument('--version', action='version', version=__version__)
+    
+    def _make_parser_release_plugin(self):
+        parser = self._subparsers.add_parser('release-plugin',
+                                             description='Release (build and deploy) plugins',
+                                             help='Release (build and deploy) plugins')
+        self._make_options_plugin_identifiers(parser)
+        self._make_options_plugin_registries(parser)
+        self._make_options_plugin_sets(parser)
+        self._make_options_testing_production(parser)
+        self._make_options_settings(parser)
+        
+    def _make_options_plugin_identifiers(self, parser):
+        parser.add_argument('--plugin-identifier',
+                            metavar='PLUGID',
+                            action='append',
+                            help='add %(metavar)s to the list of plugin identifiers to build')
+        parser.add_argument('--plugin-identifiers',
+                            metavar='FILE',
+                            action='append',
+                            help='add the plugin identifiers in %(metavar)s to the list of plugin identifiers to build')
+        parser.add_argument('remainder',
+                            metavar='PLUGID',
+                            nargs='*',
+                            help='plugin identifier to build')
+
+    def _make_options_plugin_jars(self, parser):
+        parser.add_argument('--plugin-jar',
+                            metavar='PLUGJAR',
+                            type=Path,
+                            action='append',
+                            help='add %(metavar)s to the list of plugin JARs to deploy')
+        parser.add_argument('--plugin-jars',
+                            metavar='FILE',
+                            action='append',
+                            help='add the plugin JARs in %(metavar)s to the list of plugin JARs to deploy')
+        parser.add_argument('remainder',
+                            metavar='PLUGJAR',
+                            nargs='*',
+                            help='plugin JAR to deploy')
+
+    def _make_options_plugin_registries(self, parser):
+        parser.add_argument('--plugin-registries',
+                            metavar='FILE',
+                            type=Path,
+                            help=f'load plugin registries from %(metavar)s (default: {TurtlesCli._list_config_files(TurtlesCli.PLUGIN_REGISTRIES)})')
+    
+    def _make_options_plugin_sets(self, parser):
+        parser.add_argument('--plugin-sets',
+                            metavar='FILE',
+                            type=Path,
+                            help=f'load plugin sets from %(metavar)s (default: {TurtlesCli._list_config_files(TurtlesCli.PLUGIN_SETS)})')
+    
+    def _make_options_settings(self, parser):
+        parser.add_argument('--settings',
+                            metavar='FILE',
+                            type=Path,
+                            help=f'load settings from %(metavar)s (default: {TurtlesCli._list_config_files(TurtlesCli.SETTINGS)})')
+    
+    def _make_options_testing_production(self, parser):
+        parser.add_argument('--production', '-p',
+                            action='store_true',
+                            help="deploy to the registry's production directory")
+        parser.add_argument('--testing', '-t',
+                            action='store_true',
+                            help="deploy to the registry's testing directory")
 
 #
 # Main entry point
@@ -624,5 +697,6 @@ class Turtles(object):
 if __name__ == '__main__':
     if sys.version_info < (3, 6):
         sys.exit('Requires Python 3.6 or greater; currently {}'.format(sys.version))
-    Turtles().run()
+#    Turtles().run()
+    TurtlesCli().run()
 
