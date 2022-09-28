@@ -92,7 +92,7 @@ class Plugin(object):
             if entry.get('Lockss-Plugin') == 'true':
                 return Plugin.file_to_id(entry['Name'])
         else:
-            raise RuntimeException(f'error: {jarpath!s}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF')
+            raise Exception(f'error: {jarpath!s}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF')
 
     @staticmethod
     def id_to_dir(plugid):
@@ -198,19 +198,19 @@ class RcsPluginRegistry(PluginRegistry):
             raise RuntimeError('must deploy to at least one of testing or production')
         ret = list()
         if testing:
-            ret.append(self.do_deploy_plugin(plugid, jarpath, self.test_path(), interactive))
+            ret.append(self.do_deploy_plugin(plugid, jarpath, self.test_path(), interactive=interactive))
         if production:
-            ret.append(self.do_deploy_plugin(plugid, jarpath, self.prod_path(), interactive))
+            ret.append(self.do_deploy_plugin(plugid, jarpath, self.prod_path(), interactive=interactive))
         return ret
 
     def do_deploy_plugin(self, plugid, jarpath, regpath, interactive=False):
         plugin = Plugin.from_jar(jarpath)
         filestr = jarpath.name
         dstpath = Path(regpath, filestr)
-        do_chcon = (subprocess.run('command -v selinuxenabled && selinuxenabled && command -v chcon', shell=True).returncode == 0)
+        do_chcon = (subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null', shell=True).returncode == 0)
         if not dstpath.exists():
             if interactive:
-                i = input(f'{dstpath} does not exist in {self.name()} (self.id()); create it (y/n)? [n] ').lower() or 'n'
+                i = input(f'{dstpath} does not exist in {self.name()} ({self.id()}); create it (y/n)? [n] ').lower() or 'n'
                 if i != 'y':
                     return
         else:
@@ -356,9 +356,10 @@ class Turtles(object):
     
     def __init__(self):
         super().__init__()
-        self._settings = dict()
+        self._password = None
         self._plugin_sets = list()
         self._plugin_registries = list()
+        self._settings = dict()
 
     def build_plugin(self, plugids):
         return {plugid: self._build_one_plugin(plugid) for plugid in plugids}
@@ -417,6 +418,9 @@ class Turtles(object):
             raise Exception(f'{path!s}: not of kind Settings: {kind}')
         self._settings = parsed
 
+    def set_password(self, obj):
+        self._password = obj() if callable(obj) else obj
+
     def _build_one_plugin(self, plugid):
         for plugin_set in self._plugin_sets:
             if plugin_set.has_plugin(plugid):
@@ -430,8 +434,8 @@ class Turtles(object):
     def _deploy_one_plugin(self, jarpath, testing=False, production=False):
         try:
             plugid = Plugin.id_from_jar(jarpath)
-        except RuntimeException as e:
-            raise Exception(f'{jarpath}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF')
+        except Exception as e:
+            raise Exception(f'{jarpath}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF') from e
         paths = list()
         for plugin_registry in self.plugin_registries:
             if plugin_registry.has_plugin(plugid):
@@ -457,11 +461,6 @@ class Turtles(object):
         return _path(ret)
 
     def _get_plugin_signing_password(self):
-        if self._password is None:
-            if self.interactive:
-                self._password = getpass.getpass('Plugin signing password: ')
-            else:
-                raise Exception('plugin signing password is not set')
         return self._password
 
 # ----
@@ -543,34 +542,29 @@ class TurtlesCli(Turtles):
         self._make_parser()
         self._args = self._parser.parse_args()
         self._dispatch()
-        
+
+    def _build_plugin(self):
+        self.load_settings(self._args.settings or TurtlesCli.select_config_file(TurtlesCli.SETTINGS))
+        self.load_plugin_sets(self._args.plugin_sets or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_SETS))
+        self._obtain_password()
+        ret = self.build_plugin(self._get_plugin_identifiers())
+
+    def _copyright(self):
+        print(__copyright__)
+
+    def _deploy_plugin(self):
+        self.load_plugin_registries(self._args.plugin_registries or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
+        ret = self.deploy_plugin(self._get_plugin_jars())
+
     def _dispatch(self):
-        # --help and --version are automatic
-        if self._args.copyright:
-            self._one_and_done(__copyright__)
-            sys.exit()
-        elif self._args.license:
-            self._one_and_done(__license__)
-            sys.exit()
-        elif self._args.usage:
-            self._parser.print_usage()
-            sys.exit()
-        
-        if self._args.build_plugin:
-            self.load_settings(self._args.settings or TurtlesCli.select_config_file(TurtlesCli.SETTINGS))
-            self.load_plugin_sets(self._args.plugin_sets or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_SETS))
-            ret = self.build_plugin(self._get_plugin_identifiers())
-        elif self._args.deploy_plugin:
-            self.load_plugin_registries(self._args.plugin_registries or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
-            ret = self.deploy_plugin(self._get_plugin_jars())
-        elif self._args.release_plugin:
-            self.load_settings(self._args.settings or TurtlesCli.select_config_file(TurtlesCli.SETTINGS))
-            self.load_plugin_sets(self._args.plugin_sets or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_SETS))
-            self.load_plugin_registries(self._args.plugin_registries or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
-            ret = self.release_plugin(self._get_plugin_identifiers())
-        else:
-            sys.exit('internal error')
-    
+        cmd = self._args.subcommand
+        if cmd is None:
+            self._parser.error('no command; exiting')
+        fun = getattr(self, f'_{cmd}')
+        if fun is None:
+            self._parser.error(f'unknown command: {cmd}')
+        fun()
+
     def _get_plugin_identifiers(self):
         if self._plugin_identifiers is None:
             self._plugin_identifiers = list()
@@ -593,48 +587,73 @@ class TurtlesCli(Turtles):
                 self._parser.error('list of plugin JARs to deploy is empty')
         return self._plugin_jars
     
+    def _license(self):
+        print(__license__)
+
     def _make_parser(self):
         self._parser = argparse.ArgumentParser(prog=PROG)
         self._subparsers = self._parser.add_subparsers(title='commands',
-                                                       metavar='CMD',
-                                                       description="Add --help to see the command's own help message")
-        self._make_parser_main()
+                                                       dest='subcommand',
+                                                       metavar='COMMAND',
+                                                       description="Add --help to see the command's own help message",
+                                                       help='DESCRIPTION')
+        self._make_options_main()
         self._make_parser_build_plugin()
         self._make_parser_deploy_plugin()
         self._make_parser_release_plugin()
+        self._make_parser_one_and_done()
 
     def _make_parser_build_plugin(self):
-        parser = self._subparsers.add_parser('build-plugin',
+        parser = self._subparsers.add_parser('build-plugin', aliases=['bp'],
                                              description='Build plugins',
-                                             help='Build plugins')
+                                             help='build plugins')
+        self._make_options_password(parser)
         self._make_options_plugin_identifiers(parser)
         self._make_options_plugin_sets(parser)
         self._make_options_settings(parser)
         
     def _make_parser_deploy_plugin(self):
-        parser = self._subparsers.add_parser('deploy-plugin',
+        parser = self._subparsers.add_parser('deploy-plugin', aliases=['dp'],
                                              description='Deploy plugins',
-                                             help='Deploy plugins')
+                                             help='deploy plugins')
         self._make_options_plugin_jars(parser)
         self._make_options_plugin_registries(parser)
         self._make_options_testing_production(parser)
-        
-    def _make_parser_main(self):
-        self._parser.add_argument('--copyright', action='store_true', help='show copyright and exit')
-        self._parser.add_argument('--license', action='store_true', help='show license and exit')
-        self._parser.add_argument('--usage', action='store_true', help='show usage information and exit')
-        self._parser.add_argument('--version', action='version', version=__version__)
-    
+
+    def _make_parser_one_and_done(self):
+        for s in ['copyright', 'license', 'usage', 'version']:
+            p=self._subparsers.add_parser(s,
+                                        description=f'Show {s} and exit',
+                                        help=f'show {s} and exit')
+            #p.add_argument('--foo', help='Foo')
+
     def _make_parser_release_plugin(self):
-        parser = self._subparsers.add_parser('release-plugin',
+        parser = self._subparsers.add_parser('release-plugin', aliases=['rp'],
                                              description='Release (build and deploy) plugins',
-                                             help='Release (build and deploy) plugins')
+                                             help='release (build and deploy) plugins')
+        self._make_options_password(parser)
         self._make_options_plugin_identifiers(parser)
         self._make_options_plugin_registries(parser)
         self._make_options_plugin_sets(parser)
         self._make_options_testing_production(parser)
         self._make_options_settings(parser)
-        
+
+    def _make_options_password(self, parser):
+        parser.add_argument('--password',
+                            metavar='PASS',
+                            help='set the plugin signing password')
+
+    def _make_options_main(self):
+        meg = self._parser.add_mutually_exclusive_group()
+        meg.add_argument('--interactive', '-i',
+                         action='store_true',
+                         default=True,
+                         help='allow interactive prompts (default)')
+        meg.add_argument('--non-interactive', '-n',
+                         dest='interactive',
+                         action='store_false',
+                         help='disallow interactive prompts (default: --interactive)')
+
     def _make_options_plugin_identifiers(self, parser):
         parser.add_argument('--plugin-identifier',
                             metavar='PLUGID',
@@ -690,6 +709,28 @@ class TurtlesCli(Turtles):
                             action='store_true',
                             help="deploy to the registry's testing directory")
 
+    def _obtain_password(self):
+        if self._args.password is not None:
+            _p = self._args.password
+        elif self._args.interactive:
+            _p = getpass.getpass('Plugin signing password: ')
+        else:
+            self._parser.error('no plugin signing password specified while in non-interactive mode')
+        self.set_password(lambda: _p)
+
+    def _release_plugin(self):
+        self.load_settings(self._args.settings or TurtlesCli.select_config_file(TurtlesCli.SETTINGS))
+        self.load_plugin_sets(self._args.plugin_sets or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_SETS))
+        self.load_plugin_registries(self._args.plugin_registries or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
+        self._obtain_password()
+        ret = self.release_plugin(self._get_plugin_identifiers())
+
+    def _usage(self):
+        self._parser.print_usage()
+
+    def _version(self):
+        print(__version__)
+
 #
 # Main entry point
 #
@@ -697,6 +738,5 @@ class TurtlesCli(Turtles):
 if __name__ == '__main__':
     if sys.version_info < (3, 6):
         sys.exit('Requires Python 3.6 or greater; currently {}'.format(sys.version))
-#    Turtles().run()
     TurtlesCli().run()
 
