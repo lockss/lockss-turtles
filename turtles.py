@@ -370,7 +370,7 @@ class Turtles(object):
 
     def release_plugin(self, plugids, testing=False, production=False):
         ret1 = self.build_plugin(plugids)
-        plugjars = [ret1.values()]
+        plugjars = list(ret1.values())
         ret2 = self.deploy_plugin(plugjars, testing=testing, production=production)
         return {plugid: ret2[ret1[plugid]] for plugid in ret1.keys()}
 
@@ -500,7 +500,7 @@ class TurtlesCli(Turtles):
     def run(self):
         self._make_parser()
         self._args = self._parser.parse_args()
-        self._dispatch()
+        self._args.fun()
 
     def _build_plugin(self):
         self.load_settings(self._args.settings or TurtlesCli._select_config_file(TurtlesCli.SETTINGS))
@@ -514,15 +514,6 @@ class TurtlesCli(Turtles):
     def _deploy_plugin(self):
         self.load_plugin_registries(self._args.plugin_registries or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
         ret = self.deploy_plugin(self._get_plugin_jars())
-
-    def _dispatch(self):
-        cmd = self._args.subcommand
-        if cmd is None:
-            self._parser.error('no command; exiting')
-        fun = getattr(self, f'_{cmd}')
-        if fun is None:
-            self._parser.error(f'unknown command: {cmd}')
-        fun()
 
     def _get_plugin_identifiers(self):
         if self._plugin_identifiers is None:
@@ -552,7 +543,7 @@ class TurtlesCli(Turtles):
     def _make_parser(self):
         self._parser = argparse.ArgumentParser(prog=PROG)
         self._subparsers = self._parser.add_subparsers(title='commands',
-                                                       dest='subcommand',
+                                                       #dest='subcommand',
                                                        metavar='COMMAND',
                                                        description="Add --help to see the command's own help message",
                                                        help='DESCRIPTION')
@@ -566,30 +557,34 @@ class TurtlesCli(Turtles):
         parser = self._subparsers.add_parser('build-plugin', aliases=['bp'],
                                              description='Build plugins',
                                              help='build plugins')
+        #parser.set_defaults(fun=self._build_plugin)
         self._make_options_password(parser)
         self._make_options_plugin_identifiers(parser)
         self._make_options_plugin_sets(parser)
         self._make_options_settings(parser)
-        
+
     def _make_parser_deploy_plugin(self):
         parser = self._subparsers.add_parser('deploy-plugin', aliases=['dp'],
                                              description='Deploy plugins',
                                              help='deploy plugins')
+        parser.set_defaults(fun=self._deploy_plugin)
         self._make_options_plugin_jars(parser)
         self._make_options_plugin_registries(parser)
         self._make_options_testing_production(parser)
 
     def _make_parser_one_and_done(self):
         for s in ['copyright', 'license', 'usage', 'version']:
-            p=self._subparsers.add_parser(s,
-                                        description=f'Show {s} and exit',
-                                        help=f'show {s} and exit')
-            #p.add_argument('--foo', help='Foo')
+            parser = self._subparsers.add_parser(s,
+                                                 description=f'Show {s} and exit',
+                                                 help=f'show {s} and exit')
+
+            parser.set_defaults(fun=getattr(self, f'_{s}'))
 
     def _make_parser_release_plugin(self):
         parser = self._subparsers.add_parser('release-plugin', aliases=['rp'],
                                              description='Release (build and deploy) plugins',
                                              help='release (build and deploy) plugins')
+        parser.set_defaults(fun=self._release_plugin)
         self._make_options_password(parser)
         self._make_options_plugin_identifiers(parser)
         self._make_options_plugin_registries(parser)
@@ -617,10 +612,12 @@ class TurtlesCli(Turtles):
         parser.add_argument('--plugin-identifier',
                             metavar='PLUGID',
                             action='append',
+                            default=list(),
                             help='add %(metavar)s to the list of plugin identifiers to build')
         parser.add_argument('--plugin-identifiers',
                             metavar='FILE',
                             action='append',
+                            default=list(),
                             help='add the plugin identifiers in %(metavar)s to the list of plugin identifiers to build')
         parser.add_argument('remainder',
                             metavar='PLUGID',
@@ -632,10 +629,12 @@ class TurtlesCli(Turtles):
                             metavar='PLUGJAR',
                             type=Path,
                             action='append',
+                            default=list(),
                             help='add %(metavar)s to the list of plugin JARs to deploy')
         parser.add_argument('--plugin-jars',
                             metavar='FILE',
                             action='append',
+                            default=list(),
                             help='add the plugin JARs in %(metavar)s to the list of plugin JARs to deploy')
         parser.add_argument('remainder',
                             metavar='PLUGJAR',
@@ -681,8 +680,10 @@ class TurtlesCli(Turtles):
         self.load_settings(self._args.settings or TurtlesCli._select_config_file(TurtlesCli.SETTINGS))
         self.load_plugin_sets(self._args.plugin_sets or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_SETS))
         self.load_plugin_registries(self._args.plugin_registries or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
+        if not (self._args.testing or self._args.production):
+            self._parser.error('must deploy to at least one of testing or production')
         self._obtain_password()
-        ret = self.release_plugin(self._get_plugin_identifiers())
+        ret = self.release_plugin(self._get_plugin_identifiers(), testing=self._args.testing, production=self._args.production)
 
     def _usage(self):
         self._parser.print_usage()
