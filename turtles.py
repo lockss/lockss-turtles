@@ -50,11 +50,12 @@ import zipfile
 PROG = 'turtles'
 
 def _file_lines(path):
+    f = None
     try:
         f = open(_path(path), 'r') if path != '-' else sys.stdin 
         return [line for line in [line.partition('#')[0].strip() for line in f] if len(line) > 0]
     finally:
-        if path != '-':
+        if f is not None and path != '-':
             f.close() 
 
 def _path(purepath_or_string):
@@ -370,7 +371,7 @@ class Turtles(object):
     def release_plugin(self, plugids, testing=False, production=False):
         ret1 = self.build_plugin(plugids)
         plugjars = [ret1.values()]
-        ret2 = self._deploy_plugin(plugjars, testing=testing, production=production)
+        ret2 = self.deploy_plugin(plugjars, testing=testing, production=production)
         return {plugid: ret2[ret1[plugid]] for plugid in ret1.keys()}
 
     def load_plugin_registries(self, path):
@@ -437,7 +438,7 @@ class Turtles(object):
         except Exception as e:
             raise Exception(f'{jarpath}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF') from e
         paths = list()
-        for plugin_registry in self.plugin_registries:
+        for plugin_registry in self._plugin_registries:
             if plugin_registry.has_plugin(plugid):
                 paths.extend(plugin_registry.deploy_plugin(plugid,
                                                            jarpath,
@@ -483,7 +484,7 @@ class TurtlesCli(Turtles):
 
     @staticmethod
     def _select_config_file(filename):
-        for x in TurtlesCli.config_files(filename):
+        for x in TurtlesCli._config_files(filename):
             if x.is_file():
                 return x
         return None
@@ -502,8 +503,8 @@ class TurtlesCli(Turtles):
         self._dispatch()
 
     def _build_plugin(self):
-        self.load_settings(self._args.settings or TurtlesCli.select_config_file(TurtlesCli.SETTINGS))
-        self.load_plugin_sets(self._args.plugin_sets or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_SETS))
+        self.load_settings(self._args.settings or TurtlesCli._select_config_file(TurtlesCli.SETTINGS))
+        self.load_plugin_sets(self._args.plugin_sets or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_SETS))
         self._obtain_password()
         ret = self.build_plugin(self._get_plugin_identifiers())
 
@@ -511,7 +512,7 @@ class TurtlesCli(Turtles):
         print(__copyright__)
 
     def _deploy_plugin(self):
-        self.load_plugin_registries(self._args.plugin_registries or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
+        self.load_plugin_registries(self._args.plugin_registries or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
         ret = self.deploy_plugin(self._get_plugin_jars())
 
     def _dispatch(self):
@@ -677,9 +678,9 @@ class TurtlesCli(Turtles):
         self.set_password(lambda: _p)
 
     def _release_plugin(self):
-        self.load_settings(self._args.settings or TurtlesCli.select_config_file(TurtlesCli.SETTINGS))
-        self.load_plugin_sets(self._args.plugin_sets or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_SETS))
-        self.load_plugin_registries(self._args.plugin_registries or TurtlesCli.select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
+        self.load_settings(self._args.settings or TurtlesCli._select_config_file(TurtlesCli.SETTINGS))
+        self.load_plugin_sets(self._args.plugin_sets or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_SETS))
+        self.load_plugin_registries(self._args.plugin_registries or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
         self._obtain_password()
         ret = self.release_plugin(self._get_plugin_identifiers())
 
