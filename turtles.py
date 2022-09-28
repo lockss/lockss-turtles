@@ -463,48 +463,6 @@ class Turtles(object):
     def _get_plugin_signing_password(self):
         return self._password
 
-# ----
-
-    def make_parser(self):
-        # Make parser
-        usage = '''
-    %(prog)s --build-plugin [OPTIONS] --plugin-identifier=PLUG
-    %(prog)s --deploy-plugin [OPTIONS] [--production] [--testing] --plugin-jar=JAR
-    %(prog)s --release-plugin [OPTIONS] [--production] [--testing] --plugin-identifier=PLUG
-    %(prog)s (--copyright|--help|--license|--usage|--version)'''
-        parser = argparse.ArgumentParser(prog='turtles', usage=usage, add_help=False)
-        # Mutually exclusive commands
-        m1a = parser.add_mutually_exclusive_group(required=True)
-        m1a.add_argument('--build-plugin', '-b', action='store_true', help='build plugins')
-        m1a.add_argument('--copyright', '-C', action='store_true', help='show copyright and exit')
-        m1a.add_argument('--deploy-plugin', '-d', action='store_true', help='deploy plugins')
-        m1a.add_argument('--help', '-h', action='help', help='show this help message and exit')
-        m1a.add_argument('--license', '-L', action='store_true', help='show license and exit')
-        m1a.add_argument('--release-plugin', '-r', action='store_true', help='release (build and deploy) plugins')
-        m1a.add_argument('--usage', '-U', action='store_true', help='show usage information and exit')
-        m1a.add_argument('--version', '-V', action='version', version=__version__)
-        # Plugin build options
-        g2 = parser.add_argument_group('Plugin build options (--build-plugin, --release-plugin)')
-        g2.add_argument('--password', metavar='PASS', help='use %(metavar)s as the plugin signing keystore password (default: interactive prompt)')
-        g2.add_argument('--plugin-identifier', metavar='PLUG', action='append', help='add %(metavar)s to the list of plugin identifiers to build')
-        g2.add_argument('--plugin-identifiers', metavar='FILE', action='append', help='add the plugin identifiers in %(metavar)s to the list of plugin identifiers to build')
-        # Plugin deployment options (--deploy-plugin)
-        g3 = parser.add_argument_group('Plugin deployment options (--deploy-plugin, --release-plugin)')
-        g3.add_argument('--plugin-jar', metavar='JAR', type=Path, action='append', help='(--deploy-plugin only) add %(metavar)s to the list of plugin JARs to deploy')
-        g3.add_argument('--plugin-jars', metavar='FILE', action='append', help='(--deploy-plugin only) add the plugin JARs in %(metavar)s to the list of plugin JARs to deploy')
-        g3.add_argument('--production', '-p', action='store_true', help="deploy to the registry's production directory")
-        g3.add_argument('--testing', '-t', action='store_true', help="deploy to the registry's testing directory")
-        # Config group
-        g4 = parser.add_argument_group('Configuration options')
-        m4a = g4.add_mutually_exclusive_group()
-        m4a.add_argument('--interactive', '-i', action='store_true', help='enable interactive prompts (default: --non-interactive)')
-        m4a.add_argument('--non-interactive', '-n', dest='interactive', action='store_const', const=False, help='disallow interactive prompts (default)')
-        g4.add_argument('--plugin-registries', metavar='FILE', type=Path, help=f'load plugin registries from %(metavar)s (default: {self.list_config_files(Turtles.PLUGIN_REGISTRIES)})')
-        g4.add_argument('--plugin-sets', metavar='FILE', type=Path, help=f'load plugin sets from %(metavar)s (default: {self.list_config_files(Turtles.PLUGIN_SETS)})')
-        g4.add_argument('--settings', metavar='FILE', type=Path, help=f'load settings from %(metavar)s (default: {self.list_config_files(Turtles.SETTINGS)})')
-        # Return parser
-        return parser
-
 class TurtlesCli(Turtles):
     
     XDG_CONFIG_DIR=xdg.xdg_config_home().joinpath(PROG)
