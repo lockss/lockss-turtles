@@ -500,6 +500,8 @@ class TurtlesCli(Turtles):
     def run(self):
         self._make_parser()
         self._args = self._parser.parse_args()
+        if self._args.debug:
+            print(self._args)
         self._args.fun()
 
     def _build_plugin(self):
@@ -598,6 +600,9 @@ class TurtlesCli(Turtles):
                             help='set the plugin signing password')
 
     def _make_options_main(self):
+        self._parser.add_argument('--debug',
+                                  action='store_true',
+                                  help='print the result of parsing command line arguments')
         meg = self._parser.add_mutually_exclusive_group()
         meg.add_argument('--interactive', '-i',
                          action='store_true',
