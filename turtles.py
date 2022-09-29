@@ -557,7 +557,7 @@ class TurtlesCli(Turtles):
         parser = self._subparsers.add_parser('build-plugin', aliases=['bp'],
                                              description='Build plugins',
                                              help='build plugins')
-        #parser.set_defaults(fun=self._build_plugin)
+        parser.set_defaults(fun=self._build_plugin)
         self._make_options_password(parser)
         self._make_options_plugin_identifiers(parser)
         self._make_options_plugin_sets(parser)
