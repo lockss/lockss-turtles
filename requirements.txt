@@ -36,6 +36,11 @@ java-manifest
 # https://pyyaml.org/wiki/PyYAMLDocumentation
 pyyaml
 
+# tabulate
+# https://pypi.org/project/tabulate/
+# https://github.com/astanin/python-tabulate
+tabulate
+
 # xdg
 # https://pypi.org/project/xdg/
 xdg
