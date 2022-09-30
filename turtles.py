@@ -365,13 +365,19 @@ class Turtles(object):
     def build_plugin(self, plugids):
         return {plugid: self._build_one_plugin(plugid) for plugid in plugids}
 
-    def deploy_plugin(self, plugjars, testing=False, production=False):
-        return {jarpath: self._deploy_one_plugin(jarpath, testing=testing, production=production) for jarpath in plugjars}
+    def deploy_plugin(self, plugjars, testing=False, production=False, interactive=False):
+        return {jarpath: self._deploy_one_plugin(jarpath,
+                                                 testing=testing,
+                                                 production=production,
+                                                 interactive=interactive) for jarpath in plugjars}
 
-    def release_plugin(self, plugids, testing=False, production=False):
+    def release_plugin(self, plugids, testing=False, production=False, interactive=False):
         ret1 = self.build_plugin(plugids)
         plugjars = list(ret1.values())
-        ret2 = self.deploy_plugin(plugjars, testing=testing, production=production)
+        ret2 = self.deploy_plugin(plugjars,
+                                  testing=testing,
+                                  production=production,
+                                  interactive=interactive)
         return {plugid: ret2[ret1[plugid]] for plugid in ret1.keys()}
 
     def load_plugin_registries(self, path):
@@ -432,7 +438,7 @@ class Turtles(object):
         else:
             raise Exception(f'{plugid}: not found in any plugin set')
 
-    def _deploy_one_plugin(self, jarpath, testing=False, production=False):
+    def _deploy_one_plugin(self, jarpath, testing=False, production=False, interactive=False):
         try:
             plugid = Plugin.id_from_jar(jarpath)
         except Exception as e:
@@ -444,7 +450,7 @@ class Turtles(object):
                                                            jarpath,
                                                            testing=testing,
                                                            production=production,
-                                                           interactive=False))
+                                                           interactive=interactive))
         if len(paths) == 0:
             raise Exception(f'{jarpath}: {plugid} not declared in any plugin registry')
         return paths
@@ -515,7 +521,11 @@ class TurtlesCli(Turtles):
 
     def _deploy_plugin(self):
         self.load_plugin_registries(self._args.plugin_registries or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
-        ret = self.deploy_plugin(self._get_plugin_jars())
+        ret = self.deploy_plugin(self._get_plugin_jars(),
+                                 testing=self._args.testing,
+                                 production=self._args.production,
+                                 interactive=self._args.interactive)
+
 
     def _get_plugin_identifiers(self):
         if self._plugin_identifiers is None:
@@ -545,9 +555,10 @@ class TurtlesCli(Turtles):
     def _make_parser(self):
         self._parser = argparse.ArgumentParser(prog=PROG)
         self._subparsers = self._parser.add_subparsers(title='commands',
-                                                       #dest='subcommand',
-                                                       metavar='COMMAND',
                                                        description="Add --help to see the command's own help message",
+                                                       # In subparsers, metavar is also used as the heading of the column of subcommands
+                                                       metavar='COMMAND',
+                                                       # In subparsers, help is used as the heading of the column of subcommand descriptions
                                                        help='DESCRIPTION')
         self._make_options_main()
         self._make_parser_build_plugin()
@@ -688,10 +699,20 @@ class TurtlesCli(Turtles):
         if not (self._args.testing or self._args.production):
             self._parser.error('must deploy to at least one of testing or production')
         self._obtain_password()
-        ret = self.release_plugin(self._get_plugin_identifiers(), testing=self._args.testing, production=self._args.production)
+        ret = self.release_plugin(self._get_plugin_identifiers(),
+                                  testing=self._args.testing,
+                                  production=self._args.production,
+                                  interactive=self._args.interactive)
 
     def _usage(self):
         self._parser.print_usage()
+        print()
+        uniq = set()
+        for cmd, par in self._subparsers.choices.items():
+            if par not in uniq:
+                uniq.add(par)
+                for s in par.format_usage().split('\n'):
+                    print(f'{" " * 7}{s[7:]}' if s.startswith('usage: ') else s)
 
     def _version(self):
         print(__version__)
