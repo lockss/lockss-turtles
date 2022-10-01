@@ -528,8 +528,8 @@ class TurtlesCli(Turtles):
         self.load_plugin_registries(self._args.plugin_registries or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
         self.load_plugin_sets(self._args.plugin_sets or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_SETS))
 
-        h = 'Plugins declared in a plugin registry but not found in any plugin set'
-        print(f'{h}\n{"=" * len(h)}\n')
+        #######
+        HEADING = 'Plugins declared in a plugin registry but not found in any plugin set'
         a = list()
         ah = ['Plugin registry', 'Plugin identifier']
         for plugin_registry in self._plugin_registries:
@@ -539,7 +539,9 @@ class TurtlesCli(Turtles):
                         break
                 else: # No plugin set matched
                     a.append([plugin_registry.id(), plugid])
-        print(tabulate.tabulate(a, headers=ah, tablefmt=self._args.output_format))
+        if len(a) > 0:
+            print(f'{HEADING}\n{"=" * len(HEADING)}\n')
+            print(tabulate.tabulate(a, headers=ah, tablefmt=self._args.output_format))
 
     def _build_plugin(self):
         # Prerequisites
