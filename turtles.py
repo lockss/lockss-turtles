@@ -42,7 +42,7 @@ from pathlib import Path, PurePath
 import shutil
 import subprocess
 import sys
-from tabulate import tabulate
+import tabulate
 import xdg
 import xml.etree.ElementTree as ET
 import yaml
@@ -204,12 +204,12 @@ class RcsPluginRegistry(PluginRegistry):
         jarpath = _path(jarpath)
         ret = list()
         if testing:
-            ret.append((PluginRegistry.TESTING, self.do_deploy_plugin(plugid, jarpath, self.test_path(), interactive=interactive)))
+            ret.append((PluginRegistry.TESTING, self._do_deploy_plugin(plugid, jarpath, self.test_path(), interactive=interactive)))
         if production:
-            ret.append((PluginRegistry.PRODUCTION, self.do_deploy_plugin(plugid, jarpath, self.prod_path(), interactive=interactive)))
+            ret.append((PluginRegistry.PRODUCTION, self._do_deploy_plugin(plugid, jarpath, self.prod_path(), interactive=interactive)))
         return ret
 
-    def do_deploy_plugin(self, plugid, jarpath, regpath, interactive=False):
+    def _do_deploy_plugin(self, plugid, jarpath, regpath, interactive=False):
         plugin = Plugin.from_jar(jarpath)
         filestr = jarpath.name
         dstpath = Path(regpath, filestr)
@@ -522,6 +522,25 @@ class TurtlesCli(Turtles):
             print(self._args)
         self._args.fun()
 
+    def _analyze_registry(self):
+        # Prerequisites
+        self.load_settings(self._args.settings or TurtlesCli._select_config_file(TurtlesCli.SETTINGS))
+        self.load_plugin_registries(self._args.plugin_registries or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
+        self.load_plugin_sets(self._args.plugin_sets or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_SETS))
+
+        h = 'Plugins declared in a plugin registry but not found in any plugin set'
+        print(f'{h}\n{"=" * len(h)}\n')
+        a = list()
+        ah = ['Plugin registry', 'Plugin identifier']
+        for plugin_registry in self._plugin_registries:
+            for plugid in plugin_registry.plugin_identifiers():
+                for plugin_set in self._plugin_sets:
+                    if plugin_set.has_plugin(plugid):
+                        break
+                else: # No plugin set matched
+                    a.append([plugin_registry.id(), plugid])
+        print(tabulate.tabulate(a, headers=ah, tablefmt=self._args.output_format))
+
     def _build_plugin(self):
         # Prerequisites
         self.load_settings(self._args.settings or TurtlesCli._select_config_file(TurtlesCli.SETTINGS))
@@ -530,8 +549,9 @@ class TurtlesCli(Turtles):
         # Action
         ret = self.build_plugin(self._get_plugin_identifiers())
         # Output
-        print(tabulate([[key, *val] for key, val in ret.items()],
-                       headers=['Plugin identifier', 'Plugin set', 'Plugin JAR']))
+        print(tabulate.tabulate([[key, *val] for key, val in ret.items()],
+                                headers=['Plugin identifier', 'Plugin set', 'Plugin JAR']),
+                                tablefmt=self._args.output_format)
 
     def _copyright(self):
         print(__copyright__)
@@ -545,8 +565,9 @@ class TurtlesCli(Turtles):
                                  production=self._args.production,
                                  interactive=self._args.interactive)
         # Output
-        print(tabulate([[*key, *row] for key, val in ret.items() for row in val],
-                       headers=['Plugin JAR', 'Plugin identifier', 'Plugin registry', 'Registry type', 'Deployed JAR']))
+        print(tabulate.tabulate([[*key, *row] for key, val in ret.items() for row in val],
+                                headers=['Plugin JAR', 'Plugin identifier', 'Plugin registry', 'Registry type', 'Deployed JAR'],
+                                tablefmt=self._args.output_format))
 
     def _get_plugin_identifiers(self):
         if self._plugin_identifiers is None:
@@ -589,6 +610,13 @@ class TurtlesCli(Turtles):
                                dest='interactive',
                                action='store_false',
                                help='disallow interactive prompts (default: --interactive)')
+
+    def _make_option_output_format(self, container):
+        container.add_argument('--output-format',
+                               metavar='FMT',
+                               choices=tabulate.tabulate_formats,
+                               default='simple',
+                               help='set tabular output format to %(metavar)s (choices: %(choices)s; default: %(default)s)')
 
     def _make_option_password(self, container):
         container.add_argument('--password',
@@ -668,6 +696,8 @@ class TurtlesCli(Turtles):
         meg1 = self._parser.add_mutually_exclusive_group()
         self._make_option_interactive(meg1)
         self._make_option_non_interactive(meg1)
+        self._make_option_output_format(self._parser)
+        self._make_parser_analyze_registry(self._subparsers)
         self._make_parser_build_plugin(self._subparsers)
         self._make_parser_copyright(self._subparsers)
         self._make_parser_deploy_plugin(self._subparsers)
@@ -675,6 +705,15 @@ class TurtlesCli(Turtles):
         self._make_parser_release_plugin(self._subparsers)
         self._make_parser_usage(self._subparsers)
         self._make_parser_version(self._subparsers)
+
+    def _make_parser_analyze_registry(self, container):
+        parser = container.add_parser('analyze-registry', aliases=['ar'],
+                                      description='Analyze plugin registries',
+                                      help='analyze plugin registries')
+        parser.set_defaults(fun=self._analyze_registry)
+        self._make_option_plugin_registries(parser)
+        self._make_option_plugin_sets(parser)
+        self._make_option_settings(parser)
 
     def _make_parser_build_plugin(self, container):
         parser = container.add_parser('build-plugin', aliases=['bp'],
@@ -756,8 +795,9 @@ class TurtlesCli(Turtles):
                                   production=self._args.production,
                                   interactive=self._args.interactive)
         # Output
-        print(tabulate([[key, *row] for key, val in ret.items() for row in val],
-                       headers=['Plugin identifier', 'Plugin registry', 'Registry type', 'Deployed JAR']))
+        print(tabulate.tabulate([[key, *row] for key, val in ret.items() for row in val],
+                                headers=['Plugin identifier', 'Plugin registry', 'Registry type', 'Deployed JAR'],
+                                tablefmt=self._args.output_format))
 
     def _usage(self):
         self._parser.print_usage()
