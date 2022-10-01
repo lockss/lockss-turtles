@@ -170,6 +170,9 @@ class PluginRegistry(object):
     def deploy_plugin(self, plugid, srcpath, testing=False, production=False, interactive=False):
         raise NotImplementedError('deploy_plugin')
         
+    def get_file_for(self, plugid, tier):
+        raise NotImplementedError('get_file_for')
+
     def has_plugin(self, plugid):
         return plugid in self.plugin_identifiers()
         
@@ -208,6 +211,18 @@ class RcsPluginRegistry(PluginRegistry):
         if production:
             ret.append((PluginRegistry.PRODUCTION, self._do_deploy_plugin(plugid, jarpath, self.prod_path(), interactive=interactive)))
         return ret
+
+    def get_file_for(self, plugid, tier):
+        if tier == PluginRegistry.TESTING:
+            regpath = self.test_path()
+        elif tier == PluginRegistry.PRODUCTION:
+            regpath = self.prod_path()
+        else:
+            raise Exception(f'unknown tier: {tier}')
+        # FIXME: this logic is actually a policy of the plugin set, not the plugin registry
+        filestr = f'{plugid.split(".")[-1]}.jar'
+        jarpath = Path(regpath, filestr)
+        return jarpath if jarpath.is_file() else None
 
     def _do_deploy_plugin(self, plugid, jarpath, regpath, interactive=False):
         plugin = Plugin.from_jar(jarpath)
@@ -540,7 +555,20 @@ class TurtlesCli(Turtles):
                 else: # No plugin set matched
                     a.append([plugin_registry.id(), plugid])
         if len(a) > 0:
-            print(f'{HEADING}\n{"=" * len(HEADING)}\n')
+            print(f'\n{HEADING}\n{"=" * len(HEADING)}\n')
+            print(tabulate.tabulate(a, headers=ah, tablefmt=self._args.output_format))
+
+        #######
+        HEADING = 'Plugins declared in a plugin registry but with missing JARs'
+        a = list()
+        ah = ['Plugin registry', 'Plugin registry tier', 'Plugin identifier']
+        for plugin_registry in self._plugin_registries:
+            for plugid in plugin_registry.plugin_identifiers():
+                for tier in [PluginRegistry.TESTING, PluginRegistry.PRODUCTION]:
+                    if plugin_registry.get_file_for(plugid, tier) is None:
+                        a.append([plugin_registry.id(), tier, plugid])
+        if len(a) > 0:
+            print(f'\n{HEADING}\n{"=" * len(HEADING)}\n')
             print(tabulate.tabulate(a, headers=ah, tablefmt=self._args.output_format))
 
     def _build_plugin(self):
@@ -568,7 +596,7 @@ class TurtlesCli(Turtles):
                                  interactive=self._args.interactive)
         # Output
         print(tabulate.tabulate([[*key, *row] for key, val in ret.items() for row in val],
-                                headers=['Plugin JAR', 'Plugin identifier', 'Plugin registry', 'Registry type', 'Deployed JAR'],
+                                headers=['Plugin JAR', 'Plugin identifier', 'Plugin registry', 'Plugin registry tier', 'Deployed JAR'],
                                 tablefmt=self._args.output_format))
 
     def _get_plugin_identifiers(self):
