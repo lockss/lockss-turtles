@@ -595,16 +595,28 @@ class TurtlesCli(Turtles):
             self._tabulate(title, a, ah)
 
         #####
-        title = 'Plugins JARs not declared in a plugin registry'
+        title = 'Plugins JARs not declared in any plugin registry'
         a = list()
         ah = ['Plugin registry', 'Plugin registry layer', 'Plugin JAR', 'Plugin identifier']
+        # Map from layer path to the layers that have that path
+        pathlayers = dict()
         for plugin_registry in self._plugin_registries:
-            for layer in plugin_registry.get_layers():
-                for jarpath in plugin_registry.get_layer(layer).get_jars():
-                    if jarpath.stat().st_size > 0:
-                        plugid = Plugin.id_from_jar(jarpath)
-                        if not plugin_registry.has_plugin(plugid):
-                            a.append([plugin_registry.id(), layer, jarpath, plugid])
+            for layerid in plugin_registry.get_layers():
+                layer = plugin_registry.get_layer(layerid)
+                path = layer.path()
+                pathlayers.setdefault(path, list()).append(layer)
+        # Do report, taking care of not processing a path twice if overlapping
+        visited = set()
+        for plugin_registry in self._plugin_registries:
+            for layerid in plugin_registry.get_layers():
+                layer = plugin_registry.get_layer(layerid)
+                if layer.path() not in visited:
+                    visited.add(layer.path())
+                    for jarpath in layer.get_jars():
+                        if jarpath.stat().st_size > 0:
+                            plugid = Plugin.id_from_jar(jarpath)
+                            if not any([lay.plugin_registry().has_plugin(plugid) for lay in pathlayers[layer.path()]]):
+                                a.append([plugin_registry.id(), layerid, jarpath, plugid])
         if len(a) > 0:
             self._tabulate(title, a, ah)
 
@@ -885,6 +897,7 @@ class TurtlesCli(Turtles):
     def _tabulate(self, title, data, headers):
         print(self._title(title))
         print(tabulate.tabulate(data, headers=headers, tablefmt=self._args.output_format))
+        print()
 
     def _title(self, s):
         return f'{"=" * len(s)}\n{s}\n{"=" * len(s)}\n'
