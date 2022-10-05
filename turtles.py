@@ -601,9 +601,10 @@ class TurtlesCli(Turtles):
         for plugin_registry in self._plugin_registries:
             for layer in plugin_registry.get_layers():
                 for jarpath in plugin_registry.get_layer(layer).get_jars():
-                    plugid = Plugin.id_from_jar(jarpath)
-                    if not plugin_registry.has_plugin(plugid):
-                        a.append([plugin_registry.id(), layer, jarpath, plugid])
+                    if jarpath.stat().st_size > 0:
+                        plugid = Plugin.id_from_jar(jarpath)
+                        if not plugin_registry.has_plugin(plugid):
+                            a.append([plugin_registry.id(), layer, jarpath, plugid])
         if len(a) > 0:
             self._tabulate(title, a, ah)
 
