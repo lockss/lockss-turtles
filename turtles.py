@@ -167,6 +167,15 @@ class PluginRegistry(object):
         super().__init__()
         self._parsed = parsed
 
+    def get_layer(self, layerid):
+        for layer in self._parsed['layers']:
+            if layer['id'] == layerid:
+                return self._make_layer(layer)
+        return None
+
+    def get_layers(self):
+        return [layer['id'] for layer in self._parsed['layers']]
+
     def has_plugin(self, plugid):
         return plugid in self.plugin_identifiers()
         
@@ -182,15 +191,6 @@ class PluginRegistry(object):
     def plugin_identifiers(self):
         return self._parsed['plugin-identifiers']
     
-    def get_layer(self, layerid):
-        for layer in self._parsed['layers']:
-            if layer['id'] == layerid:
-                return self._make_layer(layer)
-        return None
-
-    def get_layers(self):
-        return [layer['id'] for layer in self._parsed['layers']]
-
     def _make_layer(self, parsed):
         raise NotImplementedError('_make_layer')
 
@@ -206,6 +206,9 @@ class PluginRegistryLayer(object):
 
     def get_file_for(self, plugid):
         raise NotImplementedError('get_file_for')
+
+    def get_jars(self):
+        raise NotImplementedError('get_jars')
 
     def id(self):
         return self._parsed['id']
@@ -259,6 +262,9 @@ class RcsPluginRegistry(PluginRegistry):
             filename = f'{plugid.split(".")[-1]}.jar'
             jarpath = Path(self.path(), filename)
             return jarpath if jarpath.is_file() else None
+
+        def get_jars(self):
+            return sorted(self.path().glob('*.jar'))
 
     LAYOUT = 'rcs'
 
@@ -574,8 +580,7 @@ class TurtlesCli(Turtles):
                 else: # No plugin set matched
                     a.append([plugin_registry.id(), plugid])
         if len(a) > 0:
-            print(self._title(title))
-            print(tabulate.tabulate(a, headers=ah, tablefmt=self._args.output_format))
+            self._tabulate(title, a, ah)
 
         #####
         title = 'Plugins declared in a plugin registry but with missing JARs'
@@ -587,8 +592,20 @@ class TurtlesCli(Turtles):
                     if plugin_registry.get_layer(layer).get_file_for(plugid) is None:
                         a.append([plugin_registry.id(), layer, plugid])
         if len(a) > 0:
-            print(self._title(title))
-            print(tabulate.tabulate(a, headers=ah, tablefmt=self._args.output_format))
+            self._tabulate(title, a, ah)
+
+        #####
+        title = 'Plugins JARs not declared in a plugin registry'
+        a = list()
+        ah = ['Plugin registry', 'Plugin registry layer', 'Plugin JAR', 'Plugin identifier']
+        for plugin_registry in self._plugin_registries:
+            for layer in plugin_registry.get_layers():
+                for jarpath in plugin_registry.get_layer(layer).get_jars():
+                    plugid = Plugin.id_from_jar(jarpath)
+                    if not plugin_registry.has_plugin(plugid):
+                        a.append([plugin_registry.id(), layer.id(), jarpath, plugid])
+        if len(a) > 0:
+            self._tabulate(title, a, ah)
 
     def _build_plugin(self):
         # Prerequisites
@@ -863,6 +880,10 @@ class TurtlesCli(Turtles):
         print(tabulate.tabulate([[key, *row] for key, val in ret.items() for row in val],
                                 headers=['Plugin identifier', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
                                 tablefmt=self._args.output_format))
+
+    def _tabulate(self, title, data, headers):
+        print(self._title(title))
+        print(tabulate.tabulate(data, headers=headers, tablefmt=self._args.output_format))
 
     def _title(self, s):
         return f'{"=" * len(s)}\n{s}\n{"=" * len(s)}\n'
