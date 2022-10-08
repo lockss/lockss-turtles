@@ -595,7 +595,7 @@ class TurtlesCli(Turtles):
             self._tabulate(title, a, ah)
 
         #####
-        title = 'Plugins JARs not declared in any plugin registry'
+        title = 'Plugin JARs not declared in any plugin registry'
         a = list()
         ah = ['Plugin registry', 'Plugin registry layer', 'Plugin JAR', 'Plugin identifier']
         # Map from layer path to the layers that have that path
