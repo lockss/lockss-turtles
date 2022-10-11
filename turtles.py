@@ -139,9 +139,6 @@ class PluginRegistry(object):
 
     KIND = 'PluginRegistry'
 
-    PRODUCTION = 'production'
-    TESTING = 'testing'
-    
     @staticmethod
     def from_path(path):
         path = _path(path)
@@ -158,10 +155,15 @@ class PluginRegistry(object):
         layout = parsed.get('layout')
         if layout is None:
             raise RuntimeError(f'{path}: layout is not defined')
-        elif layout == RcsPluginRegistry.LAYOUT:
+        typ = layout.get('type')
+        if typ is None:
+            raise RuntimeError(f'{path}: layout type is not defined')
+        elif typ == DirectoryPluginRegistry.LAYOUT:
+            return DirectoryPluginRegistry(parsed)
+        elif typ == RcsPluginRegistry.LAYOUT:
             return RcsPluginRegistry(parsed)
         else:
-            raise RuntimeError(f'{path}: unknown layout: {layout}')
+            raise RuntimeError(f'{path}: unknown layout type: {typ}')
 
     def __init__(self, parsed):
         super().__init__()
@@ -196,6 +198,9 @@ class PluginRegistry(object):
 
 class PluginRegistryLayer(object):
 
+    PRODUCTION = 'production'
+    TESTING = 'testing'
+
     def __init__(self, plugin_registry, parsed):
         super().__init__()
         self._parsed = parsed
@@ -222,39 +227,19 @@ class PluginRegistryLayer(object):
     def plugin_registry(self):
         return self._plugin_registry
 
-class RcsPluginRegistry(PluginRegistry):
+class DirectoryPluginRegistry(PluginRegistry):
 
-    class RcsPluginRegistryLayer(PluginRegistryLayer):
+    class DirectoryPluginRegistryLayer(PluginRegistryLayer):
 
         def __init__(self, plugin_registry, parsed):
             super().__init__(plugin_registry, parsed)
 
-        def deploy_plugin(self, plugid, jarpath, interactive=False):
-            jarpath = _path(jarpath)  # in case it's a string
-            plugin = Plugin.from_jar(jarpath)
-            filename = jarpath.name
-            dstpath = Path(self.path(), filename)
-            do_chcon = (subprocess.run(
-                'command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null',
-                shell=True).returncode == 0)
-            if not dstpath.exists():
-                if interactive:
-                    i = input(
-                        f'{dstpath} does not exist in {self.name()} ({self.id()}); create it (y/n)? [n] ').lower() or 'n'
-                    if i != 'y':
-                        return
-            else:
-                cmd = ['co', '-l', filename]
-                subprocess.run(cmd, check=True, cwd=self.path())
-            shutil.copy(str(jarpath), str(dstpath))
-            if do_chcon:
-                cmd = ['chcon', '-t', 'httpd_sys_content_t', filename]
-                subprocess.run(cmd, check=True, cwd=self.path())
-            cmd = ['ci', '-u', f'-mVersion {plugin.version()}']
-            if not self.path().joinpath('RCS', f'{filename},v').is_file():
-                cmd.append(f'-t-{plugin.name()}')
-            cmd.append(filename)
-            subprocess.run(cmd, check=True, cwd=self.path())
+        def deploy_plugin(self, plugid, srcpath, interactive=False):
+            srcpath = _path(srcpath)  # in case it's a string
+            dstpath = Path(self.path(), srcpath.name)
+            if not self._proceed_copy(srcpath, dstpath, interactive=interactive):
+                return None
+            self._copy_jar(srcpath, dstpath, interactive=interactive)
             return dstpath
 
         def get_file_for(self, plugid):
@@ -265,6 +250,53 @@ class RcsPluginRegistry(PluginRegistry):
 
         def get_jars(self):
             return sorted(self.path().glob('*.jar'))
+
+        def _copy_jar(self, srcpath, dstpath, interactive=False):
+            filename = dstpath.name
+            shutil.copy(str(srcpath), str(dstpath))
+            if subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null',
+                              shell=True).returncode == 0:
+                cmd = ['chcon', '-t', 'httpd_sys_content_t', filename]
+                subprocess.run(cmd, check=True, cwd=self.path())
+
+        def _proceed_copy(self, srcpath, dstpath, interactive=False):
+            if not dstpath.exists():
+                if interactive:
+                    i = input(f'{dstpath} does not exist in {self.plugin_registry().id()}:{self.id()} ({self.name()}); create it (y/n)? [n] ').lower() or 'n'
+                    if i != 'y':
+                        return False
+            return True
+
+    LAYOUT = 'directory'
+
+    def __init__(self, parsed):
+        super().__init__(parsed)
+
+    def _make_layer(self, parsed):
+        return DirectoryPluginRegistry.DirectoryPluginRegistryLayer(self, parsed)
+
+class RcsPluginRegistry(DirectoryPluginRegistry):
+
+    class RcsPluginRegistryLayer(DirectoryPluginRegistry.DirectoryPluginRegistryLayer):
+
+        def __init__(self, plugin_registry, parsed):
+            super().__init__(plugin_registry, parsed)
+
+        def _copy_jar(self, srcpath, dstpath, interactive=False):
+            filename = dstpath.name
+            plugin = Plugin.from_jar(srcpath)
+            # Maybe do co -l before the parent's copy
+            if dstpath.exists():
+                cmd = ['co', '-l', filename]
+                subprocess.run(cmd, check=True, cwd=self.path())
+            # Do the parent's copy
+            super()._copy_jar(srcpath, dstpath)
+            # Do ci -u after the aprent's copy
+            cmd = ['ci', '-u', f'-mVersion {plugin.version()}']
+            if not self.path().joinpath('RCS', f'{filename},v').is_file():
+                cmd.append(f'-t-{plugin.name()}')
+            cmd.append(filename)
+            subprocess.run(cmd, check=True, cwd=self.path())
 
     LAYOUT = 'rcs'
 
@@ -721,7 +753,7 @@ class TurtlesCli(Turtles):
         container.add_argument('--production', '-p',
                                dest='layer',
                                action='append_const',
-                               const=PluginRegistry.PRODUCTION,
+                               const=PluginRegistryLayer.PRODUCTION,
                                help="synonym for --layer=%(const)s (i.e. add '%(const)s' to the list of plugin registry layers to process)")
 
     def _make_option_settings(self, container):
@@ -734,7 +766,7 @@ class TurtlesCli(Turtles):
         container.add_argument('--testing', '-t',
                                dest='layer',
                                action='append_const',
-                               const=PluginRegistry.TESTING,
+                               const=PluginRegistryLayer.TESTING,
                                help="synonym for --layer=%(const)s (i.e. add '%(const)s' to the list of plugin registry layers to process)")
 
     def _make_options_identifiers(self, container):
@@ -813,8 +845,8 @@ class TurtlesCli(Turtles):
 
     def _make_parser_build_plugin(self, container):
         parser = container.add_parser('build-plugin', aliases=['bp'],
-                                      description='Build plugins',
-                                      help='build plugins')
+                                      description='Build (package and sign) plugins',
+                                      help='build (package and sign) plugins')
         parser.set_defaults(fun=self._build_plugin)
         self._make_options_identifiers(parser)
         self._make_option_password(parser)
