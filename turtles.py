@@ -184,9 +184,12 @@ class PluginRegistry(object):
     def id(self):
         return self._parsed['id']
     
-    def layout(self):
-        return self._parsed['layout']
-    
+    def layout_type(self):
+        return self._parsed['layout']['type']
+
+    def layout_options(self):
+        return self._parsed['layout'].get('options', dict())
+
     def name(self):
         return self._parsed['name']
     
@@ -236,16 +239,14 @@ class DirectoryPluginRegistry(PluginRegistry):
 
         def deploy_plugin(self, plugid, srcpath, interactive=False):
             srcpath = _path(srcpath)  # in case it's a string
-            dstpath = Path(self.path(), srcpath.name)
+            dstpath = self._get_dstpath(plugid)
             if not self._proceed_copy(srcpath, dstpath, interactive=interactive):
                 return None
             self._copy_jar(srcpath, dstpath, interactive=interactive)
             return dstpath
 
         def get_file_for(self, plugid):
-            # FIXME: this logic is actually a policy of the plugin set, not the plugin registry
-            filename = f'{plugid.split(".")[-1]}.jar'
-            jarpath = Path(self.path(), filename)
+            jarpath = self._get_dstpath(plugid)
             return jarpath if jarpath.is_file() else None
 
         def get_jars(self):
@@ -258,6 +259,12 @@ class DirectoryPluginRegistry(PluginRegistry):
                               shell=True).returncode == 0:
                 cmd = ['chcon', '-t', 'httpd_sys_content_t', filename]
                 subprocess.run(cmd, check=True, cwd=self.path())
+
+        def _get_dstpath(self, plugid):
+            return Path(self.path(), self._get_dstfile(plugid))
+
+        def _get_dstfile(self, plugid):
+            return f'{plugid}.jar'
 
         def _proceed_copy(self, srcpath, dstpath, interactive=False):
             if not dstpath.exists():
@@ -298,7 +305,19 @@ class RcsPluginRegistry(DirectoryPluginRegistry):
             cmd.append(filename)
             subprocess.run(cmd, check=True, cwd=self.path())
 
+        def _get_dstfile(self, plugid):
+            conv = self.plugin_registry().layout_options().get('file-naming-convention')
+            if conv == RcsPluginRegistry.ABBREVIATED:
+                return f'{plugid.split(".")[-1]}.jar'
+            elif conv == RcsPluginRegistry.FULL or conv is None:
+                return super()._get_dstfile(plugid)
+            else:
+                raise RuntimeError(f'{self.plugin_registry().id()}: unknown file naming convention in layout options: {conv}')
+
     LAYOUT = 'rcs'
+
+    FULL = 'full'
+    ABBREVIATED = 'abbreviated'
 
     def __init__(self, parsed):
         super().__init__(parsed)
@@ -345,7 +364,10 @@ class PluginSet(object):
         
     def builder_type(self):
         return self._parsed['builder']['type']
-    
+
+    def builder_options(self):
+        return self._parsed['builder'].get('options', dict())
+
     def has_plugin(self, plugid):
         raise NotImplementedError('has_plugin')
         
@@ -381,10 +403,9 @@ class AntPluginSet(PluginSet):
             if curdir not in dirs:
                 dirs.append(curdir)
             curid = self.make_plugin(curid).parent_identifier()
-        dirs = [str(i).replace('.', '/') for i in dirs]
         # Invoke jarplugin
         plugfile = Plugin.id_to_file(plugid)
-        plugjar = self.root_path().joinpath('plugins/jars', f'{plugfile.stem}.jar')
+        plugjar = self.root_path().joinpath('plugins/jars', f'{plugid}.jar')
         plugjar.parent.mkdir(parents=True, exist_ok=True)
         cmd = ['test/scripts/jarplugin',
                '-j', str(plugjar),
@@ -430,6 +451,83 @@ class AntPluginSet(PluginSet):
         
     def _plugin_path(self, plugid):
         return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
+
+
+#
+# class AntPluginSet
+#
+class MavenPluginSet(PluginSet):
+
+    TYPE = 'maven'
+
+    def __init__(self, parsed, path):
+        super().__init__(parsed)
+        self._root = path.parent
+
+    def build_plugin(self, plugid, keystore, alias, password=None):
+
+        ###FIXME
+
+        # Prerequisites
+        if 'JAVA_HOME' not in os.environ:
+            raise RuntimeError('error: JAVA_HOME must be set in your environment')
+        # Get all directories for jarplugin -d
+        dirs = list()
+        curid = plugid
+        while curid is not None:
+            curdir = Plugin.id_to_dir(curid)
+            if curdir not in dirs:
+                dirs.append(curdir)
+            curid = self.make_plugin(curid).parent_identifier()
+        # Invoke jarplugin
+        plugfile = Plugin.id_to_file(plugid)
+        plugjar = self.root_path().joinpath('plugins/jars', f'{plugid}.jar')
+        plugjar.parent.mkdir(parents=True, exist_ok=True)
+        cmd = ['test/scripts/jarplugin',
+               '-j', str(plugjar),
+               '-p', str(plugfile)]
+        for dir in dirs:
+            cmd.extend(['-d', dir])
+        subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+        # Invoke signplugin
+        cmd = ['test/scripts/signplugin',
+               '--jar', str(plugjar),
+               '--alias', alias,
+               '--keystore', str(keystore)]
+        if password is not None:
+            cmd.extend(['--password', password])
+        subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+        if not plugjar.is_file():
+            raise FileNotFoundError(str(plugjar))
+        return plugjar
+
+    def has_plugin(self, plugid):
+        return self._plugin_path(plugid).is_file()
+
+    def main(self):
+        return self._parsed.get('main', 'src/main/java')
+
+    def main_path(self):
+        return self.root_path().joinpath(self.main())
+
+    def make_plugin(self, plugid):
+        return Plugin.from_path(self._plugin_path(plugid))
+
+    def root(self):
+        return self._root
+
+    def root_path(self):
+        return Path(self.root()).expanduser().resolve()
+
+    def test(self):
+        return self._parsed.get('test', 'src/test/java')
+
+    def test_path(self):
+        return self.root_path().joinpath(self.test())
+
+    def _plugin_path(self, plugid):
+        return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
+
 
 class Turtles(object):
     
