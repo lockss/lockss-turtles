@@ -98,7 +98,7 @@ The following plugin set builder types are supported:
 
    **System prerequisites.** This builder requires:
 
-   *  Java 8 Development Kit (JDK)
+   *  Java Development Kit 8 (JDK)
 
    *  Apache Ant
 
@@ -109,7 +109,7 @@ The following plugin set builder types are supported:
 
    **System prerequisites.** This builder requires:
 
-   *  Java 8 Development Kit (JDK)
+   *  Java Development Kit 8 (JDK)
 
    *  Apache Maven
 
@@ -221,9 +221,9 @@ Other layout types could be defined to support other uses cases out there, and/o
 Configuring
 -----------
 
-When Turtles looks for a configuration file, it looks in the following directories in sequence until it finds a the matching file:
+When Turtles looks for a configuration file, it looks in the following directories in sequence until it finds the matching file:
 
-*  ``${HOME}/config/turtles``
+*  ``${HOME}/.config/turtles``
 
 *  ``/etc/turtles``
 
@@ -312,7 +312,7 @@ Help message (``turtles --help``)::
 ``turtles analyze-registry``
 ============================
 
-Synonym: ``turtles ar``.
+Synonym: ``turtles ar``
 
 Help message (``turtles analyze-registry --help``)::
 
@@ -337,7 +337,7 @@ Help message (``turtles analyze-registry --help``)::
 ``turtles build-plugin``
 ========================
 
-Synonym: ``turtles bp``.
+Synonym: ``turtles bp``
 
 Help message (``turtles build-plugin --help``)::
 
@@ -369,7 +369,7 @@ Help message (``turtles build-plugin --help``)::
 ``turtles deploy-plugin``
 =========================
 
-Synonym: ``turtles dp``.
+Synonym: ``turtles dp``
 
 Help message (``turtles deploy-plugin --help``)::
 
@@ -408,7 +408,7 @@ Help message (``turtles deploy-plugin --help``)::
 ``turtles release-plugin``
 ==========================
 
-Synonym: ``turtles rp``.
+Synonym: ``turtles rp``
 
 Help message (``turtles release-plugin --help``)::
 
