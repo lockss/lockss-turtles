@@ -65,6 +65,7 @@ def _path(purepath_or_string):
     else:
         return Path(purepath_or_string).expanduser().resolve() 
 
+
 class Plugin(object):
 
     @staticmethod
@@ -135,6 +136,7 @@ class Plugin(object):
             raise ValueError(f'plugin declares {len(lst)} entries for {key}')
         return result(lst[0])
 
+
 class PluginRegistry(object):
 
     KIND = 'PluginRegistry'
@@ -199,6 +201,7 @@ class PluginRegistry(object):
     def _make_layer(self, parsed):
         raise NotImplementedError('_make_layer')
 
+
 class PluginRegistryLayer(object):
 
     PRODUCTION = 'production'
@@ -230,49 +233,8 @@ class PluginRegistryLayer(object):
     def plugin_registry(self):
         return self._plugin_registry
 
+
 class DirectoryPluginRegistry(PluginRegistry):
-
-    class DirectoryPluginRegistryLayer(PluginRegistryLayer):
-
-        def __init__(self, plugin_registry, parsed):
-            super().__init__(plugin_registry, parsed)
-
-        def deploy_plugin(self, plugid, srcpath, interactive=False):
-            srcpath = _path(srcpath)  # in case it's a string
-            dstpath = self._get_dstpath(plugid)
-            if not self._proceed_copy(srcpath, dstpath, interactive=interactive):
-                return None
-            self._copy_jar(srcpath, dstpath, interactive=interactive)
-            return dstpath
-
-        def get_file_for(self, plugid):
-            jarpath = self._get_dstpath(plugid)
-            return jarpath if jarpath.is_file() else None
-
-        def get_jars(self):
-            return sorted(self.path().glob('*.jar'))
-
-        def _copy_jar(self, srcpath, dstpath, interactive=False):
-            filename = dstpath.name
-            shutil.copy(str(srcpath), str(dstpath))
-            if subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null',
-                              shell=True).returncode == 0:
-                cmd = ['chcon', '-t', 'httpd_sys_content_t', filename]
-                subprocess.run(cmd, check=True, cwd=self.path())
-
-        def _get_dstpath(self, plugid):
-            return Path(self.path(), self._get_dstfile(plugid))
-
-        def _get_dstfile(self, plugid):
-            return f'{plugid}.jar'
-
-        def _proceed_copy(self, srcpath, dstpath, interactive=False):
-            if not dstpath.exists():
-                if interactive:
-                    i = input(f'{dstpath} does not exist in {self.plugin_registry().id()}:{self.id()} ({self.name()}); create it (y/n)? [n] ').lower() or 'n'
-                    if i != 'y':
-                        return False
-            return True
 
     LAYOUT = 'directory'
 
@@ -282,37 +244,52 @@ class DirectoryPluginRegistry(PluginRegistry):
     def _make_layer(self, parsed):
         return DirectoryPluginRegistry.DirectoryPluginRegistryLayer(self, parsed)
 
-class RcsPluginRegistry(DirectoryPluginRegistry):
 
-    class RcsPluginRegistryLayer(DirectoryPluginRegistry.DirectoryPluginRegistryLayer):
+class DirectoryPluginRegistryLayer(PluginRegistryLayer):
 
-        def __init__(self, plugin_registry, parsed):
-            super().__init__(plugin_registry, parsed)
+    def __init__(self, plugin_registry, parsed):
+        super().__init__(plugin_registry, parsed)
 
-        def _copy_jar(self, srcpath, dstpath, interactive=False):
-            filename = dstpath.name
-            plugin = Plugin.from_jar(srcpath)
-            # Maybe do co -l before the parent's copy
-            if dstpath.exists():
-                cmd = ['co', '-l', filename]
-                subprocess.run(cmd, check=True, cwd=self.path())
-            # Do the parent's copy
-            super()._copy_jar(srcpath, dstpath)
-            # Do ci -u after the aprent's copy
-            cmd = ['ci', '-u', f'-mVersion {plugin.version()}']
-            if not self.path().joinpath('RCS', f'{filename},v').is_file():
-                cmd.append(f'-t-{plugin.name()}')
-            cmd.append(filename)
+    def deploy_plugin(self, plugid, srcpath, interactive=False):
+        srcpath = _path(srcpath)  # in case it's a string
+        dstpath = self._get_dstpath(plugid)
+        if not self._proceed_copy(srcpath, dstpath, interactive=interactive):
+            return None
+        self._copy_jar(srcpath, dstpath, interactive=interactive)
+        return dstpath
+
+    def get_file_for(self, plugid):
+        jarpath = self._get_dstpath(plugid)
+        return jarpath if jarpath.is_file() else None
+
+    def get_jars(self):
+        return sorted(self.path().glob('*.jar'))
+
+    def _copy_jar(self, srcpath, dstpath, interactive=False):
+        filename = dstpath.name
+        shutil.copy(str(srcpath), str(dstpath))
+        if subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null',
+                          shell=True).returncode == 0:
+            cmd = ['chcon', '-t', 'httpd_sys_content_t', filename]
             subprocess.run(cmd, check=True, cwd=self.path())
 
-        def _get_dstfile(self, plugid):
-            conv = self.plugin_registry().layout_options().get('file-naming-convention')
-            if conv == RcsPluginRegistry.ABBREVIATED:
-                return f'{plugid.split(".")[-1]}.jar'
-            elif conv == RcsPluginRegistry.FULL or conv is None:
-                return super()._get_dstfile(plugid)
-            else:
-                raise RuntimeError(f'{self.plugin_registry().id()}: unknown file naming convention in layout options: {conv}')
+    def _get_dstpath(self, plugid):
+        return Path(self.path(), self._get_dstfile(plugid))
+
+    def _get_dstfile(self, plugid):
+        return f'{plugid}.jar'
+
+    def _proceed_copy(self, srcpath, dstpath, interactive=False):
+        if not dstpath.exists():
+            if interactive:
+                i = input(
+                    f'{dstpath} does not exist in {self.plugin_registry().id()}:{self.id()} ({self.name()}); create it (y/n)? [n] ').lower() or 'n'
+                if i != 'y':
+                    return False
+        return True
+
+
+class RcsPluginRegistry(DirectoryPluginRegistry):
 
     LAYOUT = 'rcs'
 
@@ -323,7 +300,40 @@ class RcsPluginRegistry(DirectoryPluginRegistry):
         super().__init__(parsed)
 
     def _make_layer(self, parsed):
-        return RcsPluginRegistry.RcsPluginRegistryLayer(self, parsed)
+        return RcsPluginRegistryLayer(self, parsed)
+
+
+class RcsPluginRegistryLayer(DirectoryPluginRegistryLayer):
+
+    def __init__(self, plugin_registry, parsed):
+        super().__init__(plugin_registry, parsed)
+
+    def _copy_jar(self, srcpath, dstpath, interactive=False):
+        filename = dstpath.name
+        plugin = Plugin.from_jar(srcpath)
+        # Maybe do co -l before the parent's copy
+        if dstpath.exists():
+            cmd = ['co', '-l', filename]
+            subprocess.run(cmd, check=True, cwd=self.path())
+        # Do the parent's copy
+        super()._copy_jar(srcpath, dstpath)
+        # Do ci -u after the aprent's copy
+        cmd = ['ci', '-u', f'-mVersion {plugin.version()}']
+        if not self.path().joinpath('RCS', f'{filename},v').is_file():
+            cmd.append(f'-t-{plugin.name()}')
+        cmd.append(filename)
+        subprocess.run(cmd, check=True, cwd=self.path())
+
+    def _get_dstfile(self, plugid):
+        conv = self.plugin_registry().layout_options().get('file-naming-convention')
+        if conv == RcsPluginRegistry.ABBREVIATED:
+            return f'{plugid.split(".")[-1]}.jar'
+        elif conv == RcsPluginRegistry.FULL or conv is None:
+            return super()._get_dstfile(plugid)
+        else:
+            raise RuntimeError(
+                f'{self.plugin_registry().id()}: unknown file naming convention in layout options: {conv}')
+
 
 class PluginSet(object):
 
@@ -380,21 +390,21 @@ class PluginSet(object):
     def name(self):
         return self._parsed['name']
     
-#
-# class AntPluginSet
-#
+
 class AntPluginSet(PluginSet):
 
     TYPE = 'ant'
         
     def __init__(self, parsed, path):
         super().__init__(parsed)
+        self._built = False
         self._root = path.parent
-        
+
     def build_plugin(self, plugid, keystore, alias, password=None):
         # Prerequisites
         if 'JAVA_HOME' not in os.environ:
             raise RuntimeError('error: JAVA_HOME must be set in your environment')
+        self._build()
         # Get all directories for jarplugin -d
         dirs = list()
         curid = plugid
@@ -448,20 +458,25 @@ class AntPluginSet(PluginSet):
         
     def test_path(self):
         return self.root_path().joinpath(self.test())
-        
+
+    def _build(self):
+        if not self._built:
+            # Do build
+            subprocess.run('ant load-plugins',
+                           shell=True, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+            self._built = True
+
     def _plugin_path(self, plugid):
         return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
 
 
-#
-# class AntPluginSet
-#
 class MavenPluginSet(PluginSet):
 
     TYPE = 'maven'
 
     def __init__(self, parsed, path):
         super().__init__(parsed)
+        self._built = False
         self._root = path.parent
 
     def build_plugin(self, plugid, keystore, alias, password=None):
@@ -524,6 +539,14 @@ class MavenPluginSet(PluginSet):
 
     def test_path(self):
         return self.root_path().joinpath(self.test())
+
+    def _build(self, keystore, alias, password=None):
+        if not self._built:
+            # Do build
+            cmd = [] ###FIXME
+            subprocess.run('ant load-plugins', ###FIXME
+                           shell=True, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+            self._built = True
 
     def _plugin_path(self, plugid):
         return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
@@ -650,6 +673,7 @@ class Turtles(object):
 
     def _get_plugin_signing_password(self):
         return self._password
+
 
 class TurtlesCli(Turtles):
     
