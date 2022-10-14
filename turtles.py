@@ -404,36 +404,10 @@ class AntPluginSet(PluginSet):
         # Prerequisites
         if 'JAVA_HOME' not in os.environ:
             raise RuntimeError('error: JAVA_HOME must be set in your environment')
-        self._build()
-        # Get all directories for jarplugin -d
-        dirs = list()
-        curid = plugid
-        while curid is not None:
-            curdir = Plugin.id_to_dir(curid)
-            if curdir not in dirs:
-                dirs.append(curdir)
-            curid = self.make_plugin(curid).parent_identifier()
-        # Invoke jarplugin
-        plugfile = Plugin.id_to_file(plugid)
-        plugjar = self.root_path().joinpath('plugins/jars', f'{plugid}.jar')
-        plugjar.parent.mkdir(parents=True, exist_ok=True)
-        cmd = ['test/scripts/jarplugin',
-               '-j', str(plugjar),
-               '-p', str(plugfile)]
-        for dir in dirs:
-            cmd.extend(['-d', dir])
-        subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
-        # Invoke signplugin
-        cmd = ['test/scripts/signplugin',
-               '--jar', str(plugjar),
-               '--alias', alias,
-               '--keystore', str(keystore)]
-        if password is not None:
-            cmd.extend(['--password', password])
-        subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
-        if not plugjar.is_file():
-            raise FileNotFoundError(str(plugjar))
-        return plugjar
+        # Big build (maybe)
+        self._big_build()
+        # Little build
+        return self._little_build(plugid, keystore, alias, password=password)
 
     def has_plugin(self, plugid):
         return self._plugin_path(plugid).is_file()
@@ -459,33 +433,14 @@ class AntPluginSet(PluginSet):
     def test_path(self):
         return self.root_path().joinpath(self.test())
 
-    def _build(self):
+    def _big_build(self):
         if not self._built:
             # Do build
             subprocess.run('ant load-plugins',
                            shell=True, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             self._built = True
 
-    def _plugin_path(self, plugid):
-        return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
-
-
-class MavenPluginSet(PluginSet):
-
-    TYPE = 'maven'
-
-    def __init__(self, parsed, path):
-        super().__init__(parsed)
-        self._built = False
-        self._root = path.parent
-
-    def build_plugin(self, plugid, keystore, alias, password=None):
-
-        ###FIXME
-
-        # Prerequisites
-        if 'JAVA_HOME' not in os.environ:
-            raise RuntimeError('error: JAVA_HOME must be set in your environment')
+    def _little_build(self, plugid, keystore, alias, password=None):
         # Get all directories for jarplugin -d
         dirs = list()
         curid = plugid
@@ -516,6 +471,23 @@ class MavenPluginSet(PluginSet):
             raise FileNotFoundError(str(plugjar))
         return plugjar
 
+    def _plugin_path(self, plugid):
+        return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
+
+
+class MavenPluginSet(PluginSet):
+
+    TYPE = 'maven'
+
+    def __init__(self, parsed, path):
+        super().__init__(parsed)
+        self._built = False
+        self._root = path.parent
+
+    def build_plugin(self, plugid, keystore, alias, password=None):
+        self._big_build(keystore, alias, password=password)
+        return self._little_build(plugid)
+
     def has_plugin(self, plugid):
         return self._plugin_path(plugid).is_file()
 
@@ -540,13 +512,21 @@ class MavenPluginSet(PluginSet):
     def test_path(self):
         return self.root_path().joinpath(self.test())
 
-    def _build(self, keystore, alias, password=None):
+    def _big_build(self, keystore, alias, password=None):
         if not self._built:
             # Do build
-            cmd = [] ###FIXME
-            subprocess.run('ant load-plugins', ###FIXME
-                           shell=True, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+            cmd = ['mvn', 'package',
+                   f'-Dkeystore.file={keystore!s}',
+                   f'-Dkeystore.alias={alias}',
+                   f'-Dkeystore.password={password}']
+            subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             self._built = True
+
+    def _little_build(self, plugid):
+        plugjar = Path(self.root_path(), 'target', 'pluginjars', f'{plugid}.jar')
+        if not plugjar.is_file():
+            raise Exception(f'{plugid}: built JAR not found: {plugjar!s}')
+        return plugjar
 
     def _plugin_path(self, plugid):
         return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
