@@ -53,65 +53,67 @@ PROG = 'turtles'
 def _file_lines(path):
     f = None
     try:
-        f = open(_path(path), 'r') if path != '-' else sys.stdin 
+        f = open(_path(path), 'r') if path != '-' else sys.stdin
         return [line for line in [line.partition('#')[0].strip() for line in f] if len(line) > 0]
     finally:
         if f is not None and path != '-':
             f.close() 
 
 def _path(purepath_or_string):
-    if issubclass(type(purepath_or_string), PurePath):
-        return purepath_or_string
-    else:
-        return Path(purepath_or_string).expanduser().resolve() 
+    if not issubclass(type(purepath_or_string), PurePath):
+        purepath_or_string=Path(purepath_or_string)
+    return purepath_or_string.expanduser().resolve()
 
 
 class Plugin(object):
 
     @staticmethod
-    def from_jar(jarpath):
-        jarpath = _path(jarpath) # in case it's a string
-        plugid = Plugin.id_from_jar(jarpath)
-        plugfile = str(Plugin.id_to_file(plugid))
-        with zipfile.ZipFile(jarpath, 'r') as zf:
-            with zf.open(plugfile, 'r') as mf:
-                return Plugin(mf, plugfile)
+    def from_jar(jar_path):
+        jar_path = _path(jar_path) # in case it's a string
+        plugin_id = Plugin.id_from_jar(jar_path)
+        plugin_fstr = str(Plugin.id_to_file(plugin_id))
+        with zipfile.ZipFile(jar_path, 'r') as zip_file:
+            with zip_file.open(plugin_fstr, 'r') as plugin_file:
+                return Plugin(plugin_file, plugin_fstr)
 
     @staticmethod
-    def from_path(filepath):
-        filepath = _path(filepath) # in case it's a string
-        with open(filepath, 'r') as f:
-            return Plugin(f, filepath)
+    def from_path(path):
+        path = _path(path) # in case it's a string
+        with open(path, 'r') as input_file:
+            return Plugin(input_file, path)
 
     @staticmethod
-    def file_to_id(filepath):
-        return filepath.replace('/', '.')[:-4] # for .xml
+    def file_to_id(plugin_fstr):
+        return plugin_fstr.replace('/', '.')[:-4] # 4 is len('.xml')
 
     @staticmethod
-    def id_from_jar(jarpath):
-        jarpath = _path(jarpath) # in case it's a string
-        manifest = java_manifest.from_jar(jarpath)
+    def id_from_jar(jar_path):
+        jar_path = _path(jar_path) # in case it's a string
+        manifest = java_manifest.from_jar(jar_path)
         for entry in manifest:
             if entry.get('Lockss-Plugin') == 'true':
-                return Plugin.file_to_id(entry['Name'])
+                name = entry.get('Name')
+                if name is None:
+                    raise Exception(f'{jar_path!s}: Lockss-Plugin entry in META-INF/MANIFEST.MF has no Name value')
+                return Plugin.file_to_id(name)
         else:
-            raise Exception(f'error: {jarpath!s}: no valid Lockss-Plugin entry in META-INF/MANIFEST.MF')
+            raise Exception(f'{jar_path!s}: no Lockss-Plugin entry in META-INF/MANIFEST.MF')
 
     @staticmethod
-    def id_to_dir(plugid):
-        return Plugin.id_to_file(plugid).parent
+    def id_to_dir(plugin_id):
+        return Plugin.id_to_file(plugin_id).parent
 
     @staticmethod
-    def id_to_file(plugid):
-        return Path(f'{plugid.replace(".", "/")}.xml')
+    def id_to_file(plugin_id):
+        return Path(f'{plugin_id.replace(".", "/")}.xml')
 
-    def __init__(self, f, path):
+    def __init__(self, plugin_file, plugin_path):
         super().__init__()
-        self._path = path
-        self._parsed = ET.parse(f).getroot()
+        self._path = plugin_path
+        self._parsed = ET.parse(plugin_file).getroot()
         tag = self._parsed.tag
         if tag != 'map':
-            raise RuntimeError(f'{path!s}: invalid root element: {tag}')
+            raise RuntimeError(f'{plugin_path!s}: invalid root element: {tag}')
 
     def name(self):
         return self._only_one('plugin_name')
@@ -242,7 +244,7 @@ class DirectoryPluginRegistry(PluginRegistry):
         super().__init__(parsed)
 
     def _make_layer(self, parsed):
-        return DirectoryPluginRegistry.DirectoryPluginRegistryLayer(self, parsed)
+        return DirectoryPluginRegistryLayer(self, parsed)
 
 
 class DirectoryPluginRegistryLayer(PluginRegistryLayer):
@@ -361,7 +363,7 @@ class PluginSet(object):
         elif typ == AntPluginSet.TYPE:
             return AntPluginSet(parsed, path)
         elif typ == 'mvn':
-            raise NotImplementedError(f'{path}: the builder type mvn is not implemented yet')
+            return MavenPluginSet(parsed, path)
         else:
             raise RuntimeError(f'{path}: unknown builder type: {typ}')
 
@@ -369,7 +371,7 @@ class PluginSet(object):
         super().__init__()
         self._parsed = parsed
     
-    def build_plugin(self, plugid, keystore, alias, password=None):
+    def build_plugin(self, plugin_id, keystore_path, keystore_alias, keystore_password=None):
         raise NotImplementedError('build_plugin')
         
     def builder_type(self):
@@ -400,14 +402,14 @@ class AntPluginSet(PluginSet):
         self._built = False
         self._root = path.parent
 
-    def build_plugin(self, plugid, keystore, alias, password=None):
+    def build_plugin(self, plugin_id, keystore_path, keystore_alias, keystore_password=None):
         # Prerequisites
         if 'JAVA_HOME' not in os.environ:
             raise RuntimeError('error: JAVA_HOME must be set in your environment')
         # Big build (maybe)
         self._big_build()
         # Little build
-        return self._little_build(plugid, keystore, alias, password=password)
+        return self._little_build(plugin_id, keystore_path, keystore_alias, password=keystore_password)
 
     def has_plugin(self, plugid):
         return self._plugin_path(plugid).is_file()
@@ -466,13 +468,22 @@ class AntPluginSet(PluginSet):
                '--keystore', str(keystore)]
         if password is not None:
             cmd.extend(['--password', password])
-        subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+        try:
+            subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+        except subprocess.CalledProcessError as cpe:
+            raise self._sanitize(cpe)
         if not plugjar.is_file():
             raise FileNotFoundError(str(plugjar))
         return plugjar
 
     def _plugin_path(self, plugid):
         return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
+
+    def _sanitize(self, called_process_error):
+        i = 0
+        for i in range(len(called_process_error.cmd)):
+            if i > 1 and called_process_error.cmd[i - 1] == '--password':
+                called_process_error.cmd[i] = '<password>'
 
 
 class MavenPluginSet(PluginSet):
@@ -484,9 +495,9 @@ class MavenPluginSet(PluginSet):
         self._built = False
         self._root = path.parent
 
-    def build_plugin(self, plugid, keystore, alias, password=None):
-        self._big_build(keystore, alias, password=password)
-        return self._little_build(plugid)
+    def build_plugin(self, plugin_id, keystore_path, keystore_alias, keystore_password=None):
+        self._big_build(keystore_path, keystore_alias, keystore_password=keystore_password)
+        return self._little_build(plugin_id)
 
     def has_plugin(self, plugid):
         return self._plugin_path(plugid).is_file()
@@ -512,24 +523,33 @@ class MavenPluginSet(PluginSet):
     def test_path(self):
         return self.root_path().joinpath(self.test())
 
-    def _big_build(self, keystore, alias, password=None):
+    def _big_build(self, keystore_path, keystore_alias, keystore_password=None):
         if not self._built:
             # Do build
             cmd = ['mvn', 'package',
-                   f'-Dkeystore.file={keystore!s}',
-                   f'-Dkeystore.alias={alias}',
-                   f'-Dkeystore.password={password}']
-            subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+                   f'-Dkeystore.file={keystore_path!s}',
+                   f'-Dkeystore.alias={keystore_alias}',
+                   f'-Dkeystore.password={keystore_password}']
+            try:
+                subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+            except subprocess.CalledProcessError as cpe:
+                raise self._sanitize(cpe)
             self._built = True
 
-    def _little_build(self, plugid):
-        plugjar = Path(self.root_path(), 'target', 'pluginjars', f'{plugid}.jar')
-        if not plugjar.is_file():
-            raise Exception(f'{plugid}: built JAR not found: {plugjar!s}')
-        return plugjar
+    def _little_build(self, plugin_id):
+        jar_path = Path(self.root_path(), 'target', 'pluginjars', f'{plugin_id}.jar')
+        if not jar_path.is_file():
+            raise Exception(f'{plugin_id}: built JAR not found: {jar_path!s}')
+        return jar_path
 
-    def _plugin_path(self, plugid):
-        return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
+    def _plugin_path(self, plugin_id):
+        return Path(self.main_path()).joinpath(Plugin.id_to_file(plugin_id))
+
+    def _sanitize(self, called_process_error):
+        i = 0
+        for i in range(len(called_process_error.cmd)):
+            if called_process_error.cmd[i].startswith('-Dkeystore.password='):
+                called_process_error.cmd[i] = '-Dkeystore.password=<password>'
 
 
 class Turtles(object):
@@ -541,15 +561,15 @@ class Turtles(object):
         self._plugin_registries = list()
         self._settings = dict()
 
-    def build_plugin(self, plugids):
-        return {plugid: self._build_one_plugin(plugid) for plugid in plugids}
+    def build_plugin(self, plugin_ids):
+        return {plugin_id: self._build_one_plugin(plugin_id) for plugin_id in plugin_ids}
 
-    def deploy_plugin(self, plugjars, layers, interactive=False):
-        plugids = [Plugin.id_from_jar(jarpath) for jarpath in plugjars]
-        return {(jarpath, plugid): self._deploy_one_plugin(jarpath,
-                                                           plugid,
-                                                           layers,
-                                                           interactive=interactive) for jarpath, plugid in zip(plugjars, plugids)}
+    def deploy_plugin(self, jar_paths, layers, interactive=False):
+        plugin_ids = [Plugin.id_from_jar(jar_path) for jar_path in jar_paths]
+        return {(jar_path, plugin_id): self._deploy_one_plugin(jar_path,
+                                                               plugin_id,
+                                                               layers,
+                                                               interactive=interactive) for jar_path, plugin_id in zip(jar_paths, plugin_ids)}
 
     def load_plugin_registries(self, path):
         path = _path(path)
@@ -596,47 +616,47 @@ class Turtles(object):
             raise Exception(f'{path!s}: not of kind Settings: {kind}')
         self._settings = parsed
 
-    def release_plugin(self, plugids, layers, interactive=False):
-        ret1 = self.build_plugin(plugids)
-        plugjars = [plugjar for plugsetid, plugjar in ret1.values()]
-        ret2 = self.deploy_plugin(plugjars,
+    def release_plugin(self, plugin_ids, layers, interactive=False):
+        ret1 = self.build_plugin(plugin_ids)
+        jar_paths = [jar_path for plugin_set_id, jar_path in ret1.values()]
+        ret2 = self.deploy_plugin(jar_paths,
                                   layers,
                                   interactive=interactive)
-        return {plugid: val for (plugjar, plugid), val in ret2.items()}
+        return {plugin_id: val for (jar_path, plugin_id), val in ret2.items()}
 
     def set_password(self, obj):
         self._password = obj() if callable(obj) else obj
 
-    def _build_one_plugin(self, plugid):
+    def _build_one_plugin(self, plugin_id):
         """
         Returns a (plugsetid, plujarpath) tuple
         """
         for plugin_set in self._plugin_sets:
-            if plugin_set.has_plugin(plugid):
+            if plugin_set.has_plugin(plugin_id):
                 return (plugin_set.id(),
-                        plugin_set.build_plugin(plugid,
+                        plugin_set.build_plugin(plugin_id,
                                                 self._get_plugin_signing_keystore(),
                                                 self._get_plugin_signing_alias(),
                                                 self._get_plugin_signing_password()))
-        raise Exception(f'{plugid}: not found in any plugin set')
+        raise Exception(f'{plugin_id}: not found in any plugin set')
 
-    def _deploy_one_plugin(self, jarpath, plugid, layers, interactive=False):
+    def _deploy_one_plugin(self, plugin_jar, plugin_id, layer_ids, interactive=False):
         """
         Returns a (plugregid, layer, deplpath) tuple
         """
         ret = list()
         for plugin_registry in self._plugin_registries:
-            if plugin_registry.has_plugin(plugid):
-                for layer in layers:
-                    reglayer = plugin_registry.get_layer(layer)
-                    if reglayer is not None:
+            if plugin_registry.has_plugin(plugin_id):
+                for layer_id in layer_ids:
+                    layer = plugin_registry.get_layer(layer_id)
+                    if layer is not None:
                         ret.append((plugin_registry.id(),
-                                    reglayer.id(),
-                                    reglayer.deploy_plugin(plugid,
-                                                           jarpath,
-                                                           interactive=interactive)))
+                                    layer.id(),
+                                    layer.deploy_plugin(plugin_id,
+                                                        plugin_jar,
+                                                        interactive=interactive)))
         if len(ret) == 0:
-            raise Exception(f'{jarpath}: {plugid} not declared in any plugin registry')
+            raise Exception(f'{plugin_jar}: {plugin_id} not declared in any plugin registry')
         return ret
 
     def _get_plugin_signing_alias(self):
@@ -666,16 +686,16 @@ class TurtlesCli(Turtles):
     SETTINGS='settings.yaml'
 
     @staticmethod
-    def _config_files(filename):
-        return [Path(base, filename) for base in TurtlesCli.CONFIG_DIRS]
+    def _config_files(name):
+        return [Path(base, name) for base in TurtlesCli.CONFIG_DIRS]
 
     @staticmethod
-    def _list_config_files(filename):
-        return ' or '.join(str(x) for x in TurtlesCli._config_files(filename))
+    def _list_config_files(name):
+        return ' or '.join(str(x) for x in TurtlesCli._config_files(name))
 
     @staticmethod
-    def _select_config_file(filename):
-        for x in TurtlesCli._config_files(filename):
+    def _select_config_file(name):
+        for x in TurtlesCli._config_files(name):
             if x.is_file():
                 return x
         return None
@@ -704,55 +724,55 @@ class TurtlesCli(Turtles):
 
         #####
         title = 'Plugins declared in a plugin registry but not found in any plugin set'
-        a = list()
-        ah = ['Plugin registry', 'Plugin identifier']
+        result = list()
+        headers = ['Plugin registry', 'Plugin identifier']
         for plugin_registry in self._plugin_registries:
-            for plugid in plugin_registry.plugin_identifiers():
+            for plugin_id in plugin_registry.plugin_identifiers():
                 for plugin_set in self._plugin_sets:
-                    if plugin_set.has_plugin(plugid):
+                    if plugin_set.has_plugin(plugin_id):
                         break
                 else: # No plugin set matched
-                    a.append([plugin_registry.id(), plugid])
-        if len(a) > 0:
-            self._tabulate(title, a, ah)
+                    result.append([plugin_registry.id(), plugin_id])
+        if len(result) > 0:
+            self._tabulate(title, result, headers)
 
         #####
         title = 'Plugins declared in a plugin registry but with missing JARs'
-        a = list()
-        ah = ['Plugin registry', 'Plugin registry layer', 'Plugin identifier']
+        result = list()
+        headers = ['Plugin registry', 'Plugin registry layer', 'Plugin identifier']
         for plugin_registry in self._plugin_registries:
-            for plugid in plugin_registry.plugin_identifiers():
-                for layer in plugin_registry.get_layers():
-                    if plugin_registry.get_layer(layer).get_file_for(plugid) is None:
-                        a.append([plugin_registry.id(), layer, plugid])
-        if len(a) > 0:
-            self._tabulate(title, a, ah)
+            for plugin_id in plugin_registry.plugin_identifiers():
+                for layer_id in plugin_registry.get_layers():
+                    if plugin_registry.get_layer(layer_id).get_file_for(plugin_id) is None:
+                        result.append([plugin_registry.id(), layer_id, plugin_id])
+        if len(result) > 0:
+            self._tabulate(title, result, headers)
 
         #####
         title = 'Plugin JARs not declared in any plugin registry'
-        a = list()
-        ah = ['Plugin registry', 'Plugin registry layer', 'Plugin JAR', 'Plugin identifier']
+        result = list()
+        headers = ['Plugin registry', 'Plugin registry layer', 'Plugin JAR', 'Plugin identifier']
         # Map from layer path to the layers that have that path
         pathlayers = dict()
         for plugin_registry in self._plugin_registries:
-            for layerid in plugin_registry.get_layers():
-                layer = plugin_registry.get_layer(layerid)
-                path = layer.path()
-                pathlayers.setdefault(path, list()).append(layer)
+            for layer_id in plugin_registry.get_layers():
+                layer_id = plugin_registry.get_layer(layer_id)
+                path = layer_id.path()
+                pathlayers.setdefault(path, list()).append(layer_id)
         # Do report, taking care of not processing a path twice if overlapping
         visited = set()
         for plugin_registry in self._plugin_registries:
-            for layerid in plugin_registry.get_layers():
-                layer = plugin_registry.get_layer(layerid)
-                if layer.path() not in visited:
-                    visited.add(layer.path())
-                    for jarpath in layer.get_jars():
-                        if jarpath.stat().st_size > 0:
-                            plugid = Plugin.id_from_jar(jarpath)
-                            if not any([lay.plugin_registry().has_plugin(plugid) for lay in pathlayers[layer.path()]]):
-                                a.append([plugin_registry.id(), layerid, jarpath, plugid])
-        if len(a) > 0:
-            self._tabulate(title, a, ah)
+            for layer_id in plugin_registry.get_layers():
+                layer_id = plugin_registry.get_layer(layer_id)
+                if layer_id.path() not in visited:
+                    visited.add(layer_id.path())
+                    for jar_path in layer_id.get_jars():
+                        if jar_path.stat().st_size > 0:
+                            plugin_id = Plugin.id_from_jar(jar_path)
+                            if not any([lay.plugin_registry().has_plugin(plugin_id) for lay in pathlayers[layer_id.path()]]):
+                                result.append([plugin_registry.id(), layer_id, jar_path, plugin_id])
+        if len(result) > 0:
+            self._tabulate(title, result, headers)
 
     def _build_plugin(self):
         # Prerequisites
