@@ -174,13 +174,16 @@ class PluginRegistry(object):
         self._parsed = parsed
 
     def get_layer(self, layerid):
-        for layer in self._parsed['layers']:
-            if layer['id'] == layerid:
-                return self._make_layer(layer)
+        for layer in self.get_layers():
+            if layer.id() == layerid:
+                return layer
         return None
 
+    def get_layer_ids(self):
+        return [layer.id() for layer in self.get_layers()]
+
     def get_layers(self):
-        return [layer['id'] for layer in self._parsed['layers']]
+        return [self._make_layer(layer_elem) for layer_elem in self._parsed['layers']]
 
     def has_plugin(self, plugid):
         return plugid in self.plugin_identifiers()
@@ -252,40 +255,40 @@ class DirectoryPluginRegistryLayer(PluginRegistryLayer):
     def __init__(self, plugin_registry, parsed):
         super().__init__(plugin_registry, parsed)
 
-    def deploy_plugin(self, plugid, srcpath, interactive=False):
-        srcpath = _path(srcpath)  # in case it's a string
-        dstpath = self._get_dstpath(plugid)
-        if not self._proceed_copy(srcpath, dstpath, interactive=interactive):
+    def deploy_plugin(self, plugin_id, src_path, interactive=False):
+        src_path = _path(src_path)  # in case it's a string
+        dst_path = self._get_dstpath(plugin_id)
+        if not self._proceed_copy(src_path, dst_path, interactive=interactive):
             return None
-        self._copy_jar(srcpath, dstpath, interactive=interactive)
-        return dstpath
+        self._copy_jar(src_path, dst_path, interactive=interactive)
+        return dst_path
 
-    def get_file_for(self, plugid):
-        jarpath = self._get_dstpath(plugid)
-        return jarpath if jarpath.is_file() else None
+    def get_file_for(self, plugin_id):
+        jar_path = self._get_dstpath(plugin_id)
+        return jar_path if jar_path.is_file() else None
 
     def get_jars(self):
         return sorted(self.path().glob('*.jar'))
 
-    def _copy_jar(self, srcpath, dstpath, interactive=False):
-        filename = dstpath.name
-        shutil.copy(str(srcpath), str(dstpath))
+    def _copy_jar(self, src_path, dst_path, interactive=False):
+        basename = dst_path.name
+        shutil.copy(str(src_path), str(dst_path))
         if subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null',
                           shell=True).returncode == 0:
-            cmd = ['chcon', '-t', 'httpd_sys_content_t', filename]
+            cmd = ['chcon', '-t', 'httpd_sys_content_t', basename]
             subprocess.run(cmd, check=True, cwd=self.path())
 
-    def _get_dstpath(self, plugid):
-        return Path(self.path(), self._get_dstfile(plugid))
+    def _get_dstpath(self, plugin_id):
+        return Path(self.path(), self._get_dstfile(plugin_id))
 
-    def _get_dstfile(self, plugid):
-        return f'{plugid}.jar'
+    def _get_dstfile(self, plugin_id):
+        return f'{plugin_id}.jar'
 
-    def _proceed_copy(self, srcpath, dstpath, interactive=False):
-        if not dstpath.exists():
+    def _proceed_copy(self, src_path, dst_path, interactive=False):
+        if not dst_path.exists():
             if interactive:
                 i = input(
-                    f'{dstpath} does not exist in {self.plugin_registry().id()}:{self.id()} ({self.name()}); create it (y/n)? [n] ').lower() or 'n'
+                    f'{dst_path} does not exist in {self.plugin_registry().id()}:{self.id()} ({self.name()}); create it (y/n)? [n] ').lower() or 'n'
                 if i != 'y':
                     return False
         return True
@@ -310,20 +313,20 @@ class RcsPluginRegistryLayer(DirectoryPluginRegistryLayer):
     def __init__(self, plugin_registry, parsed):
         super().__init__(plugin_registry, parsed)
 
-    def _copy_jar(self, srcpath, dstpath, interactive=False):
-        filename = dstpath.name
-        plugin = Plugin.from_jar(srcpath)
+    def _copy_jar(self, src_path, dst_path, interactive=False):
+        basename = dst_path.name
+        plugin = Plugin.from_jar(src_path)
         # Maybe do co -l before the parent's copy
-        if dstpath.exists():
-            cmd = ['co', '-l', filename]
+        if dst_path.exists():
+            cmd = ['co', '-l', basename]
             subprocess.run(cmd, check=True, cwd=self.path())
         # Do the parent's copy
-        super()._copy_jar(srcpath, dstpath)
+        super()._copy_jar(src_path, dst_path)
         # Do ci -u after the aprent's copy
         cmd = ['ci', '-u', f'-mVersion {plugin.version()}']
-        if not self.path().joinpath('RCS', f'{filename},v').is_file():
+        if not self.path().joinpath('RCS', f'{basename},v').is_file():
             cmd.append(f'-t-{plugin.name()}')
-        cmd.append(filename)
+        cmd.append(basename)
         subprocess.run(cmd, check=True, cwd=self.path())
 
     def _get_dstfile(self, plugid):
@@ -409,10 +412,10 @@ class AntPluginSet(PluginSet):
         # Big build (maybe)
         self._big_build()
         # Little build
-        return self._little_build(plugin_id, keystore_path, keystore_alias, password=keystore_password)
+        return self._little_build(plugin_id, keystore_path, keystore_alias, keystore_password=keystore_password)
 
-    def has_plugin(self, plugid):
-        return self._plugin_path(plugid).is_file()
+    def has_plugin(self, plugin_id):
+        return self._plugin_path(plugin_id).is_file()
         
     def main(self):
         return self._parsed.get('main', 'plugins/src')
@@ -420,8 +423,8 @@ class AntPluginSet(PluginSet):
     def main_path(self):
         return self.root_path().joinpath(self.main())
         
-    def make_plugin(self, plugid):
-        return Plugin.from_path(self._plugin_path(plugid))
+    def make_plugin(self, plugin_id):
+        return Plugin.from_path(self._plugin_path(plugin_id))
         
     def root(self):
         return self._root
@@ -442,18 +445,18 @@ class AntPluginSet(PluginSet):
                            shell=True, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             self._built = True
 
-    def _little_build(self, plugid, keystore, alias, password=None):
+    def _little_build(self, plugin_id, keystore_path, keystore_alias, keystore_password=None):
         # Get all directories for jarplugin -d
         dirs = list()
-        curid = plugid
+        curid = plugin_id
         while curid is not None:
             curdir = Plugin.id_to_dir(curid)
             if curdir not in dirs:
                 dirs.append(curdir)
             curid = self.make_plugin(curid).parent_identifier()
         # Invoke jarplugin
-        plugfile = Plugin.id_to_file(plugid)
-        plugjar = self.root_path().joinpath('plugins/jars', f'{plugid}.jar')
+        plugfile = Plugin.id_to_file(plugin_id)
+        plugjar = self.root_path().joinpath('plugins/jars', f'{plugin_id}.jar')
         plugjar.parent.mkdir(parents=True, exist_ok=True)
         cmd = ['test/scripts/jarplugin',
                '-j', str(plugjar),
@@ -464,10 +467,10 @@ class AntPluginSet(PluginSet):
         # Invoke signplugin
         cmd = ['test/scripts/signplugin',
                '--jar', str(plugjar),
-               '--alias', alias,
-               '--keystore', str(keystore)]
-        if password is not None:
-            cmd.extend(['--password', password])
+               '--alias', keystore_alias,
+               '--keystore', str(keystore_path)]
+        if keystore_password is not None:
+            cmd.extend(['--password', keystore_password])
         try:
             subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
         except subprocess.CalledProcessError as cpe:
@@ -476,8 +479,8 @@ class AntPluginSet(PluginSet):
             raise FileNotFoundError(str(plugjar))
         return plugjar
 
-    def _plugin_path(self, plugid):
-        return Path(self.main_path()).joinpath(Plugin.id_to_file(plugid))
+    def _plugin_path(self, plugin_id):
+        return Path(self.main_path()).joinpath(Plugin.id_to_file(plugin_id))
 
     def _sanitize(self, called_process_error):
         i = 0
@@ -573,6 +576,8 @@ class Turtles(object):
 
     def load_plugin_registries(self, path):
         path = _path(path)
+        if not path.is_file():
+            raise FileNotFoundError(str(path))
         parsed = None
         with path.open('r') as f:
             parsed = yaml.safe_load(f)
@@ -590,6 +595,8 @@ class Turtles(object):
 
     def load_plugin_sets(self, path):
         path = _path(path)
+        if not path.is_file():
+            raise FileNotFoundError(str(path))
         parsed = None
         with path.open('r') as f:
             parsed = yaml.safe_load(f)
@@ -607,6 +614,8 @@ class Turtles(object):
 
     def load_settings(self, path):
         path = _path(path)
+        if not path.is_file():
+            raise FileNotFoundError(str(path))
         with path.open('r') as f:
             parsed = yaml.safe_load(f)
         kind = parsed.get('kind')
@@ -616,11 +625,11 @@ class Turtles(object):
             raise Exception(f'{path!s}: not of kind Settings: {kind}')
         self._settings = parsed
 
-    def release_plugin(self, plugin_ids, layers, interactive=False):
+    def release_plugin(self, plugin_ids, layer_ids, interactive=False):
         ret1 = self.build_plugin(plugin_ids)
         jar_paths = [jar_path for plugin_set_id, jar_path in ret1.values()]
         ret2 = self.deploy_plugin(jar_paths,
-                                  layers,
+                                  layer_ids,
                                   interactive=interactive)
         return {plugin_id: val for (jar_path, plugin_id), val in ret2.items()}
 
@@ -742,7 +751,7 @@ class TurtlesCli(Turtles):
         headers = ['Plugin registry', 'Plugin registry layer', 'Plugin identifier']
         for plugin_registry in self._plugin_registries:
             for plugin_id in plugin_registry.plugin_identifiers():
-                for layer_id in plugin_registry.get_layers():
+                for layer_id in plugin_registry.get_layer_ids():
                     if plugin_registry.get_layer(layer_id).get_file_for(plugin_id) is None:
                         result.append([plugin_registry.id(), layer_id, plugin_id])
         if len(result) > 0:
@@ -755,14 +764,14 @@ class TurtlesCli(Turtles):
         # Map from layer path to the layers that have that path
         pathlayers = dict()
         for plugin_registry in self._plugin_registries:
-            for layer_id in plugin_registry.get_layers():
+            for layer_id in plugin_registry.get_layer_ids():
                 layer_id = plugin_registry.get_layer(layer_id)
                 path = layer_id.path()
                 pathlayers.setdefault(path, list()).append(layer_id)
         # Do report, taking care of not processing a path twice if overlapping
         visited = set()
         for plugin_registry in self._plugin_registries:
-            for layer_id in plugin_registry.get_layers():
+            for layer_id in plugin_registry.get_layer_ids():
                 layer_id = plugin_registry.get_layer(layer_id)
                 if layer_id.path() not in visited:
                     visited.add(layer_id.path())
