@@ -39,7 +39,6 @@ import getpass
 import java_manifest
 import os
 from pathlib import Path, PurePath
-import shutil
 import subprocess
 import sys
 import tabulate
@@ -253,7 +252,7 @@ class DirectoryPluginRegistry(PluginRegistry):
 
         def _copy_jar(self, srcpath, dstpath, interactive=False):
             filename = dstpath.name
-            shutil.copy(str(srcpath), str(dstpath))
+            subprocess.run(['cp', str(srcpath), str(dstpath)], shell=True, check=True, cwd=self.path())
             if subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null',
                               shell=True).returncode == 0:
                 cmd = ['chcon', '-t', 'httpd_sys_content_t', filename]
