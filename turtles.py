@@ -39,6 +39,7 @@ import getpass
 import java_manifest
 import os
 from pathlib import Path, PurePath
+import shlex
 import shutil
 import subprocess
 import sys
@@ -483,10 +484,13 @@ class AntPluginSet(PluginSet):
         return Path(self.main_path()).joinpath(Plugin.id_to_file(plugin_id))
 
     def _sanitize(self, called_process_error):
+        cmd = called_process_error.cmd[:]
         i = 0
-        for i in range(len(called_process_error.cmd)):
-            if i > 1 and called_process_error.cmd[i - 1] == '--password':
-                called_process_error.cmd[i] = '<password>'
+        for i in range(len(cmd)):
+            if i > 1 and cmd[i - 1] == '--password':
+                cmd[i] = '<password>'
+        called_process_error.cmd = ' '.join([shlex.quote(c) for c in cmd])
+        return called_process_error
 
 
 class MavenPluginSet(PluginSet):
@@ -549,10 +553,13 @@ class MavenPluginSet(PluginSet):
         return Path(self.main_path()).joinpath(Plugin.id_to_file(plugin_id))
 
     def _sanitize(self, called_process_error):
+        cmd = called_process_error.cmd[:]
         i = 0
-        for i in range(len(called_process_error.cmd)):
-            if called_process_error.cmd[i].startswith('-Dkeystore.password='):
-                called_process_error.cmd[i] = '-Dkeystore.password=<password>'
+        for i in range(len(cmd)):
+            if cmd[i].startswith('-Dkeystore.password='):
+                cmd[i] = '-Dkeystore.password=<password>'
+        called_process_error.cmd = ' '.join([shlex.quote(c) for c in cmd])
+        return called_process_error
 
 
 class Turtles(object):
