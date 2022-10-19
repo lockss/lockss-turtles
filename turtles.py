@@ -32,7 +32,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 '''
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 import argparse
 import getpass
@@ -285,15 +285,16 @@ class RcsPluginRegistry(DirectoryPluginRegistry):
         def _copy_jar(self, srcpath, dstpath, interactive=False):
             filename = dstpath.name
             plugin = Plugin.from_jar(srcpath)
+            rcs_path = self.path().joinpath('RCS', f'{filename},v')
             # Maybe do co -l before the parent's copy
-            if dstpath.exists():
+            if dstpath.exists() and rcs_path.is_file():
                 cmd = ['co', '-l', filename]
                 subprocess.run(cmd, check=True, cwd=self.path())
             # Do the parent's copy
             super()._copy_jar(srcpath, dstpath)
             # Do ci -u after the aprent's copy
             cmd = ['ci', '-u', f'-mVersion {plugin.version()}']
-            if not self.path().joinpath('RCS', f'{filename},v').is_file():
+            if not rcs_path.is_file():
                 cmd.append(f'-t-{plugin.name()}')
             cmd.append(filename)
             subprocess.run(cmd, check=True, cwd=self.path())
