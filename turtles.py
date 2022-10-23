@@ -252,7 +252,7 @@ class DirectoryPluginRegistry(PluginRegistry):
 
         def _copy_jar(self, srcpath, dstpath, interactive=False):
             filename = dstpath.name
-            subprocess.run(f'cp {srcpath!s} {dstpath!s}', shell=True, check=True, cwd=self.path())
+            subprocess.run(['cp', str(srcpath), str(dstpath)], check=True, cwd=self.path())
             if subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null',
                               shell=True).returncode == 0:
                 cmd = ['chcon', '-t', 'httpd_sys_content_t', filename]
