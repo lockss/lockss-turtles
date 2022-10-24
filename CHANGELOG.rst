@@ -3,6 +3,28 @@ Release Notes
 =============
 
 -----
+0.2.0
+-----
+
+Released: FIXME
+
+.. rubric:: Features
+
+*  ``MavenPluginSet``, for Maven projects inheriting from ``org.lockss:lockss-plugins-parent-pom``.
+
+*  ``AntPluginSet``: file naming convention layout option.
+
+*  Tabular output now includes the plugin version.
+
+.. rubric:: Bug Fixes
+
+*  ``AntPluginSet``: run ``ant load-plugins`` before building plugins.
+
+.. rubric:: Changes
+
+*  Default tabular output format is now ``tsv``.
+
+-----
 0.1.1
 -----
 
@@ -26,6 +48,8 @@ Initial release.
 
 *  ``AntPluginSet``, based on the classic ``lockss-daemon`` Ant builder.
 
-*  Simple ``DirectoryPluginRegistry``, and ``RcsPluginRegistry``, based on the classic RCS layout.
+*  ``DirectoryPluginRegistry``, for a simple layout.
+
+*  ``RcsPluginRegistry``, based on the classic RCS layout.
 
 *  Tabular output by `tabulate <https://pypi.org/project/tabulate/>`_.

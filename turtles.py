@@ -217,10 +217,11 @@ class PluginRegistryLayer(object):
         self._parsed = parsed
         self._plugin_registry = plugin_registry
 
-    def deploy_plugin(self, plugid, jarpath, interactive=False):
+    # Returns (dst_path, plugin)
+    def deploy_plugin(self, plugin_id, jar_path, interactive=False):
         raise NotImplementedError('deploy_plugin')
 
-    def get_file_for(self, plugid):
+    def get_file_for(self, plugin_id):
         raise NotImplementedError('get_file_for')
 
     def get_jars(self):
@@ -261,7 +262,7 @@ class DirectoryPluginRegistryLayer(PluginRegistryLayer):
         if not self._proceed_copy(src_path, dst_path, interactive=interactive):
             return None
         self._copy_jar(src_path, dst_path, interactive=interactive)
-        return dst_path
+        return (dst_path, Plugin.from_jar(src_path))
 
     def get_file_for(self, plugin_id):
         jar_path = self._get_dstpath(plugin_id)
@@ -374,7 +375,8 @@ class PluginSet(object):
     def __init__(self, parsed):
         super().__init__()
         self._parsed = parsed
-    
+
+    # Returns (jar_path, plugin)
     def build_plugin(self, plugin_id, keystore_path, keystore_alias, keystore_password=None):
         raise NotImplementedError('build_plugin')
         
@@ -406,6 +408,7 @@ class AntPluginSet(PluginSet):
         self._built = False
         self._root = path.parent
 
+    # Returns (jar_path, plugin)
     def build_plugin(self, plugin_id, keystore_path, keystore_alias, keystore_password=None):
         # Prerequisites
         if 'JAVA_HOME' not in os.environ:
@@ -446,28 +449,30 @@ class AntPluginSet(PluginSet):
                            shell=True, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             self._built = True
 
+    # Returns (jar_path, plugin)
     def _little_build(self, plugin_id, keystore_path, keystore_alias, keystore_password=None):
+        plugin = self.make_plugin(plugin_id)
         # Get all directories for jarplugin -d
         dirs = list()
-        curid = plugin_id
-        while curid is not None:
-            curdir = Plugin.id_to_dir(curid)
-            if curdir not in dirs:
-                dirs.append(curdir)
-            curid = self.make_plugin(curid).parent_identifier()
+        cur_id = plugin_id
+        while cur_id is not None:
+            cur_dir = Plugin.id_to_dir(cur_id)
+            if cur_dir not in dirs:
+                dirs.append(cur_dir)
+            cur_id = self.make_plugin(cur_id).parent_identifier()
         # Invoke jarplugin
-        plugfile = Plugin.id_to_file(plugin_id)
-        plugjar = self.root_path().joinpath('plugins/jars', f'{plugin_id}.jar')
-        plugjar.parent.mkdir(parents=True, exist_ok=True)
+        jar_fstr = Plugin.id_to_file(plugin_id)
+        jar_path = self.root_path().joinpath('plugins/jars', f'{plugin_id}.jar')
+        jar_path.parent.mkdir(parents=True, exist_ok=True)
         cmd = ['test/scripts/jarplugin',
-               '-j', str(plugjar),
-               '-p', str(plugfile)]
+               '-j', str(jar_path),
+               '-p', str(jar_fstr)]
         for dir in dirs:
             cmd.extend(['-d', dir])
         subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
         # Invoke signplugin
         cmd = ['test/scripts/signplugin',
-               '--jar', str(plugjar),
+               '--jar', str(jar_path),
                '--alias', keystore_alias,
                '--keystore', str(keystore_path)]
         if keystore_password is not None:
@@ -476,9 +481,9 @@ class AntPluginSet(PluginSet):
             subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
         except subprocess.CalledProcessError as cpe:
             raise self._sanitize(cpe)
-        if not plugjar.is_file():
-            raise FileNotFoundError(str(plugjar))
-        return plugjar
+        if not jar_path.is_file():
+            raise FileNotFoundError(str(jar_path))
+        return (jar_path, plugin)
 
     def _plugin_path(self, plugin_id):
         return Path(self.main_path()).joinpath(Plugin.id_to_file(plugin_id))
@@ -502,6 +507,7 @@ class MavenPluginSet(PluginSet):
         self._built = False
         self._root = path.parent
 
+    # Returns (jar_path, plugin)
     def build_plugin(self, plugin_id, keystore_path, keystore_alias, keystore_password=None):
         self._big_build(keystore_path, keystore_alias, keystore_password=keystore_password)
         return self._little_build(plugin_id)
@@ -543,11 +549,12 @@ class MavenPluginSet(PluginSet):
                 raise self._sanitize(cpe)
             self._built = True
 
+    # Returns (jar_path, plugin)
     def _little_build(self, plugin_id):
         jar_path = Path(self.root_path(), 'target', 'pluginjars', f'{plugin_id}.jar')
         if not jar_path.is_file():
             raise Exception(f'{plugin_id}: built JAR not found: {jar_path!s}')
-        return jar_path
+        return (jar_path, Plugin.from_jar(jar_path))
 
     def _plugin_path(self, plugin_id):
         return Path(self.main_path()).joinpath(Plugin.id_to_file(plugin_id))
@@ -571,15 +578,17 @@ class Turtles(object):
         self._plugin_registries = list()
         self._settings = dict()
 
+    # Returns plugin_id -> (set_id, jar_path, plugin)
     def build_plugin(self, plugin_ids):
         return {plugin_id: self._build_one_plugin(plugin_id) for plugin_id in plugin_ids}
 
-    def deploy_plugin(self, jar_paths, layers, interactive=False):
-        plugin_ids = [Plugin.id_from_jar(jar_path) for jar_path in jar_paths]
-        return {(jar_path, plugin_id): self._deploy_one_plugin(jar_path,
+    # Returns (src_path, plugin_id) -> list of (registry_id, layer_id, dst_path, plugin)
+    def deploy_plugin(self, src_paths, layer_ids, interactive=False):
+        plugin_ids = [Plugin.id_from_jar(src_path) for src_path in src_paths]
+        return {(src_path, plugin_id): self._deploy_one_plugin(src_path,
                                                                plugin_id,
-                                                               layers,
-                                                               interactive=interactive) for jar_path, plugin_id in zip(jar_paths, plugin_ids)}
+                                                               layer_ids,
+                                                               interactive=interactive) for src_path, plugin_id in zip(src_paths, plugin_ids)}
 
     def load_plugin_registries(self, path):
         path = _path(path)
@@ -632,9 +641,12 @@ class Turtles(object):
             raise Exception(f'{path!s}: not of kind Settings: {kind}')
         self._settings = parsed
 
+    # Returns plugin_id -> list of (registry_id, layer_id, dst_path, plugin)
     def release_plugin(self, plugin_ids, layer_ids, interactive=False):
+        # ... plugin_id -> (set_id, jar_path, plugin)
         ret1 = self.build_plugin(plugin_ids)
-        jar_paths = [jar_path for plugin_set_id, jar_path in ret1.values()]
+        jar_paths = [jar_path for set_id, jar_path, plugin in ret1.values()]
+        # ... (src_path, plugin_id) -> list of (registry_id, layer_id, dst_path, plugin)
         ret2 = self.deploy_plugin(jar_paths,
                                   layer_ids,
                                   interactive=interactive)
@@ -643,6 +655,7 @@ class Turtles(object):
     def set_password(self, obj):
         self._password = obj() if callable(obj) else obj
 
+    # Returns (set_id, jar_path, plugin)
     def _build_one_plugin(self, plugin_id):
         """
         Returns a (plugsetid, plujarpath) tuple
@@ -650,16 +663,14 @@ class Turtles(object):
         for plugin_set in self._plugin_sets:
             if plugin_set.has_plugin(plugin_id):
                 return (plugin_set.id(),
-                        plugin_set.build_plugin(plugin_id,
-                                                self._get_plugin_signing_keystore(),
-                                                self._get_plugin_signing_alias(),
-                                                self._get_plugin_signing_password()))
+                        *plugin_set.build_plugin(plugin_id,
+                                                 self._get_plugin_signing_keystore(),
+                                                 self._get_plugin_signing_alias(),
+                                                 self._get_plugin_signing_password()))
         raise Exception(f'{plugin_id}: not found in any plugin set')
 
-    def _deploy_one_plugin(self, plugin_jar, plugin_id, layer_ids, interactive=False):
-        """
-        Returns a (plugregid, layer, deplpath) tuple
-        """
+    # Returns list of (registry_id, layer_id, dst_path, plugin)
+    def _deploy_one_plugin(self, src_jar, plugin_id, layer_ids, interactive=False):
         ret = list()
         for plugin_registry in self._plugin_registries:
             if plugin_registry.has_plugin(plugin_id):
@@ -668,11 +679,11 @@ class Turtles(object):
                     if layer is not None:
                         ret.append((plugin_registry.id(),
                                     layer.id(),
-                                    layer.deploy_plugin(plugin_id,
-                                                        plugin_jar,
-                                                        interactive=interactive)))
+                                    *layer.deploy_plugin(plugin_id,
+                                                         src_jar,
+                                                         interactive=interactive)))
         if len(ret) == 0:
-            raise Exception(f'{plugin_jar}: {plugin_id} not declared in any plugin registry')
+            raise Exception(f'{src_jar}: {plugin_id} not declared in any plugin registry')
         return ret
 
     def _get_plugin_signing_alias(self):
@@ -796,10 +807,11 @@ class TurtlesCli(Turtles):
         self.load_plugin_sets(self._args.plugin_sets or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_SETS))
         self._obtain_password()
         # Action
+        # ... plugin_id -> (set_id, jar_path, plugin)
         ret = self.build_plugin(self._get_identifiers())
         # Output
-        print(tabulate.tabulate([[key, *val] for key, val in ret.items()],
-                                headers=['Plugin identifier', 'Plugin set', 'Plugin JAR'],
+        print(tabulate.tabulate([[plugin_id, plugin.version(), set_id, jar_path] for plugin_id, (set_id, jar_path, plugin) in ret.items()],
+                                headers=['Plugin identifier', 'Plugin version', 'Plugin set', 'Plugin JAR'],
                                 tablefmt=self._args.output_format))
 
     def _copyright(self):
@@ -809,12 +821,13 @@ class TurtlesCli(Turtles):
         # Prerequisites
         self.load_plugin_registries(self._args.plugin_registries or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
         # Action
+        # ... (src_path, plugin_id) -> list of (registry_id, layer_id, dst_path, plugin)
         ret = self.deploy_plugin(self._get_jars(),
                                  self._get_layers(),
                                  interactive=self._args.interactive)
         # Output
-        print(tabulate.tabulate([[*key, *row] for key, val in ret.items() for row in val],
-                                headers=['Plugin JAR', 'Plugin identifier', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
+        print(tabulate.tabulate([[src_path, plugin_id, plugin.version(), registry_id, layer_id, dst_path] for (src_path, plugin_id), val in ret.items() for registry_id, layer_id, dst_path, plugin in val],
+                                headers=['Plugin JAR', 'Plugin identifier', 'Plugin version', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
                                 tablefmt=self._args.output_format))
 
     def _get_identifiers(self):
@@ -867,7 +880,7 @@ class TurtlesCli(Turtles):
         container.add_argument('--output-format',
                                metavar='FMT',
                                choices=tabulate.tabulate_formats,
-                               default='simple',
+                               default='tsv',
                                help='set tabular output format to %(metavar)s (default: %(default)s; choices: %(choices)s)')
 
     def _make_option_password(self, container):
@@ -1056,12 +1069,13 @@ class TurtlesCli(Turtles):
         self.load_plugin_registries(self._args.plugin_registries or TurtlesCli._select_config_file(TurtlesCli.PLUGIN_REGISTRIES))
         self._obtain_password()
         # Action
+        # ... plugin_id -> list of (registry_id, layer_id, dst_path, plugin)
         ret = self.release_plugin(self._get_identifiers(),
                                   self._get_layers(),
                                   interactive=self._args.interactive)
         # Output
-        print(tabulate.tabulate([[key, *row] for key, val in ret.items() for row in val],
-                                headers=['Plugin identifier', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
+        print(tabulate.tabulate([[plugin_id, plugin.version(), registry_id, layer_id, dst_path] for plugin_id, val in ret.items() for registry_id, layer_id, dst_path, plugin in val],
+                                headers=['Plugin identifier', 'Plugin version', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
                                 tablefmt=self._args.output_format))
 
     def _tabulate(self, title, data, headers):
