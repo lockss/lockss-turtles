@@ -40,7 +40,6 @@ import java_manifest
 import os
 from pathlib import Path, PurePath
 import shlex
-import shutil
 import subprocess
 import sys
 import tabulate
@@ -273,7 +272,7 @@ class DirectoryPluginRegistryLayer(PluginRegistryLayer):
 
     def _copy_jar(self, src_path, dst_path, interactive=False):
         basename = dst_path.name
-        shutil.copy(str(src_path), str(dst_path))
+        subprocess.run(['cp', str(src_path), str(dst_path)], check=True, cwd=self.path())
         if subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null',
                           shell=True).returncode == 0:
             cmd = ['chcon', '-t', 'httpd_sys_content_t', basename]
@@ -317,15 +316,16 @@ class RcsPluginRegistryLayer(DirectoryPluginRegistryLayer):
     def _copy_jar(self, src_path, dst_path, interactive=False):
         basename = dst_path.name
         plugin = Plugin.from_jar(src_path)
+        rcs_path = self.path().joinpath('RCS', f'{basename},v')
         # Maybe do co -l before the parent's copy
-        if dst_path.exists():
+        if dst_path.exists() and rcs_path.is_file():
             cmd = ['co', '-l', basename]
             subprocess.run(cmd, check=True, cwd=self.path())
         # Do the parent's copy
         super()._copy_jar(src_path, dst_path)
         # Do ci -u after the aprent's copy
         cmd = ['ci', '-u', f'-mVersion {plugin.version()}']
-        if not self.path().joinpath('RCS', f'{basename},v').is_file():
+        if not rcs_path.is_file():
             cmd.append(f'-t-{plugin.name()}')
         cmd.append(basename)
         subprocess.run(cmd, check=True, cwd=self.path())
