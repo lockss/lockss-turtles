@@ -32,7 +32,7 @@ Quick Start
 
    and invoke Turtles as ``./turtles`` from here, or put ``./turtles`` on the ``PATH`` and invoke Turtles as ``turtles`` from anywhere.
 
-*  Install Turtle's dependencies::
+*  Install Turtles' Python dependencies::
 
       pip3 install {OPTIONS...] --requirement requirements.txt
 
