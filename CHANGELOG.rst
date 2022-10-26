@@ -20,10 +20,6 @@ Released: FIXME
 
 *  ``AntPluginSet``: run ``ant load-plugins`` before building plugins.
 
-.. rubric:: Changes
-
-*  Default tabular output format is now ``tsv``.
-
 -----
 0.1.1
 -----
