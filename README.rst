@@ -4,30 +4,11 @@ Turtles
 
 Turtles is a tool to manage LOCKSS plugin sets and LOCKSS plugin registries.
 
------------
-Quick Start
------------
-
-::
-
-   # Get Turtles from Git
-   git clone .../turtles
-   cd turtles
-   # Use requirements.txt to install Turtles' Python dependencies
-   # If in venv:
-   python3 -m venv .venv
-   . .venv/bin/activate
-   pip3 install -r requirements.txt
-   # Put the file turtles on the PATH and run from anywhere: turtles ...
-   # Or run from this directory: ./turtles ...
-   turtles --help
-   turtles usage
+Turtles supports `Plugin Sets`_ using a Maven layout inheriting from ``org.lockss:lockss-plugins-parent-pom`` or the legacy Ant layout of ``lockss-daemon``, and `Plugin Registries`_ with flat directory structures (optionally with RCS versioning) on the local file system.
 
 -------------
 Prerequisites
 -------------
-
-To use Turtles, you will need:
 
 *  Python 3.6 or greater.
 
@@ -36,15 +17,129 @@ Turtles' Python dependencies are defined in its ``requirements.txt`` files.
 Other prerequisites depend on the `Plugin Set Builders`_ and `Plugin Registry Layouts`_ that may be involved in your activities; see the notes about **system prerequisites** for each.
 
 -----------
+Quick Start
+-----------
+
+*  Get Turtles from Git::
+
+      git clone https://github.com/lockss/turtles
+      cd turtles
+
+*  Create a virtual environment::
+
+      python3 -m venv .venv
+      . .venv/bin/activate
+
+   and invoke Turtles as ``./turtles`` from here, or put ``./turtles`` on the ``PATH`` and invoke Turtles as ``turtles`` from anywhere.
+
+*  Install Turtle's dependencies::
+
+      pip3 install {OPTIONS...] --requirement requirements.txt
+
+*  To build plugins from plugin sets (``build-plugin``, ``release-plugin``), configure one or more plugin sets in ``plugin-sets.yaml`` (for example ``~/.config/turtles/plugin-sets.yaml``)::
+
+      ---
+      kind: Settings
+      plugin-sets:
+        - /home/userx/lockss-daemon/turtles.yaml
+
+   and configure your plugin signing keystore in ``settings.yaml`` (``~/.config/turtles/settings.yaml``)::
+
+      ---
+      kind: Settings
+      plugin-signing-keystore: /home/userx/secrets/userx-lockss.keystore
+      plugin-signing-alias: userx-lockss
+
+*  To deploy plugins into plugin registries (``deploy-plugin``, ``release-plugins``) or manage plugin registries (``analyze-registry``), configure one or more plugin registries in ``plugin-registries.yaml`` (for example ``~/.config/turtles/plugin-sets.yaml``)::
+
+      ---
+      kind: Settings
+      plugin-registries:
+        - /var/www/plugins/turtles.yaml
+
+--------
+Examples
+--------
+
+Building plugins::
+
+   # Help message:
+   turtles build-plugin --help
+
+   # List of plugin identifiers
+   turtles build-plugin edu.myuniversity.plugin.publisherx.PublisherXPlugin edu.myuniversity.plugin.publishery.PublisherYPlugin ...
+   # Abbreviation
+   turtles bp edu.myuniversity.plugin.publisherx.PublisherXPlugin edu.myuniversity.plugin.publishery.PublisherYPlugin ...
+
+   # Alternative invocation
+   turtles build-plugin --identifier=edu.myuniversity.plugin.publisherx.PublisherXPlugin --identifier=edu.myuniversity.plugin.publishery.PublisherYPlugin ...
+   # Abbreviation
+   turtles bp -i edu.myuniversity.plugin.publisherx.PublisherXPlugin -i edu.myuniversity.plugin.publishery.PublisherYPlugin ...
+
+   # Alternative invocation
+   # /tmp/pluginids.txt has one plugin identifier per line
+   turtles build-plugin --identifiers=/tmp/pluginids.txt
+   # Abbreviation
+   turtles bp -I /tmp/pluginids.txt
+
+Deploying plugins::
+
+   # Help message:
+   turtles deploy-plugin --help
+
+   # List of JARs
+   # Deploy to 'testing' layer only
+   turtles deploy-plugin --testing /path/to/edu.myuniversity.plugin.publisherx.PublisherXPlugin.jar /path/to/edu.myuniversity.plugin.publishery.PublisherYPlugin.jar ...
+   # Abbreviation
+   turtles dp -t /path/to/edu.myuniversity.plugin.publisherx.PublisherXPlugin.jar /path/to/edu.myuniversity.plugin.publishery.PublisherYPlugin.jar ...
+
+   # Alternative invocation
+   # Deploy to 'production' layer only
+   turtles deploy-plugin --production --jar=/path/to/edu.myuniversity.plugin.publisherx.PublisherXPlugin.jar --jar=/path/to/edu.myuniversity.plugin.publishery.PublisherYPlugin.jar ...
+   # Abbreviation
+   turtles dp -p -j /path/to/edu.myuniversity.plugin.publisherx.PublisherXPlugin.jar -j /path/to/edu.myuniversity.plugin.publishery.PublisherYPlugin.jar ...
+
+   # Alternative invocation
+   # /tmp/pluginjars.txt has one JAR path per line
+   # Deploy to both 'testing' and 'production' layers
+   turtles deploy-plugin --testing --production --jars=/tmp/pluginjars.txt
+   # Abbreviation
+   turtles bp -tp -J /tmp/pluginids.txt
+
+Releasing (building and deploying) plugins::
+
+   # Help message:
+   turtles release-plugin --help
+
+   # List of plugin identifiers
+   # Deploy to 'testing' layer only
+   turtles release-plugin --testing edu.myuniversity.plugin.publisherx.PublisherXPlugin edu.myuniversity.plugin.publishery.PublisherYPlugin ...
+   # Abbreviation
+   turtles rp -t edu.myuniversity.plugin.publisherx.PublisherXPlugin edu.myuniversity.plugin.publishery.PublisherYPlugin ...
+
+   # Alternative invocation
+   # Deploy to 'production' layer only
+   turtles release-plugin --production --identifier=edu.myuniversity.plugin.publisherx.PublisherXPlugin --identifier=edu.myuniversity.plugin.publishery.PublisherYPlugin ...
+   # Abbreviation
+   turtles rp -p -i edu.myuniversity.plugin.publisherx.PublisherXPlugin -i edu.myuniversity.plugin.publishery.PublisherYPlugin ...
+
+   # Alternative invocation
+   # /tmp/pluginids.txt has one plugin identifier per line
+   # Deploy to both 'testing' and 'production' layers
+   turtles release-plugin --testing --production --identifiers=/tmp/pluginids.txt
+   # Abbreviation
+   turtles rp -tp -I /tmp/pluginids.txt
+
+-----------
 Plugin Sets
 -----------
 
-A plugin set is a project containing the source code of LOCKSS plugins.
+A plugin set is a project containing the source code of one or more LOCKSS plugins.
 
 Declaring a Plugin Set
 ======================
 
-A plugin set is defined in a YAML file typically named ``turtles.yaml`` and found at the root of the project::
+A plugin set is defined in a YAML file, typically named ``turtles.yaml`` and found at the root of the project::
 
    ---
    kind: PluginSet
@@ -88,13 +183,11 @@ Plugin Set Builders
 The following plugin set builder types are supported:
 
 ``ant``
-   The plugin set builder type ``ant`` designates a project using the legacy Ant layout of the LOCKSS Program's ``lockss-daemon`` project.
+   The plugin set builder type ``ant`` designates a project using the legacy Ant layout and build file of the LOCKSS Program's ``lockss-daemon`` project.
 
-   This builder expects an Ant build file named ``build.xml`` at the root of the project, and the scripts ``jarplugin`` and ``signplugin`` at ``test/scripts/jarplugin`` and ``test/scripts/signplugin`` respectively. (These could all become configurable if there are plugin projects out there generally using this builder logic but not matching these assumptions.)
+   This builder expects ``ant load-plugins`` to compile and verify all plugins, and the scripts ``test/scripts/jarplugin`` and ``test/scripts/signplugin``. (These could all become configurable if there are plugin projects out there generally using this builder logic but not matching these assumptions.)
 
-   In this builder, the ``main`` and ``test`` properties of the ``PluginSet`` object default to ``plugins/src`` and ``plugins/test/src`` respectively.
-
-   Currently, this builder does not look for optional configuration information in the ``options`` mapping.
+   For this builder type, the ``main`` and ``test`` properties of the ``PluginSet`` object default to ``plugins/src`` and ``plugins/test/src`` respectively.
 
    **System prerequisites.** This builder requires:
 
@@ -102,16 +195,22 @@ The following plugin set builder types are supported:
 
    *  Apache Ant
 
-``mvn``
-   **Under development.** *This builder type is not yet available.*
+   *  The environment variable ``JAVA_HOME`` must be set.
 
-   The plugin set builder type ``mvn`` designates a project using a Maven layout and inheriting from ``org.lockss:lockss-plugins-parent-pom``. In this builder, the ``main`` and ``test`` properties of the ``PluginSet`` object default to the Maven standard ``src/main/java`` and ``src/test/java`` respectively.
+   **Options.** This builder does not look for optional configuration information in the ``options`` mapping.
+
+``mvn``
+   The plugin set builder type ``mvn`` designates a project using a Maven layout and inheriting from ``org.lockss:lockss-plugins-parent-pom``.
+
+   For this builder type, the ``main`` and ``test`` properties of the ``PluginSet`` object default to the Maven standard ``src/main/java`` and ``src/test/java`` respectively.
 
    **System prerequisites.** This builder requires:
 
    *  Java Development Kit 8 (JDK)
 
    *  Apache Maven
+
+   **Options.** This builder does not look for optional configuration information in the ``options`` mapping.
 
 For other types of building strategies out there, more types of builders could be supported, and/or the tool could be extended to allow for custom builder types to be registered.
 
@@ -130,9 +229,9 @@ A plugin registry consists of one or more layers. Some plugin registries may hav
 
 Plugin layers are sequential in nature; a new version of a plugin is released to the lowest layer first, then to the next layer (after some process), and so on until the highest layer.
 
-Although the identifiers (see ``id`` below) and display names (see ``name`` below) of plugin registry layers are arbitrary, the highest layer is commonly referred to as the *production* layer, and when there are exactly two layers, the lower layer is commonly referred to as the *testing* layer. Turtles reflects this common idiom with built-in ``--production`` and ``--testing`` options.
+Although the identifiers (see ``id`` below) and display names (see ``name`` below) of plugin registry layers are arbitrary, the highest layer is commonly referred to as the *production* layer, and when there are exactly two layers, the lower layer is commonly referred to as the *testing* layer. Turtles reflects this common idiom with built-in ``--production`` and ``--testing`` options that are shorthand for ``--layer=production`` and ``--layer=testing`` respectively.
 
-It is possible for multiple plugin registries to have a layer path in common. An example would be a team working on several plugin registries for different purposes, having distinct production layer paths for different audiences but sharing a single testing layer path, if they are the only audience for it.
+It is possible for multiple plugin registries to have a layer path in common. An example would be a team working on several plugin registries for different purposes, having distinct (public) production layer paths, but sharing a single (internal) testing layer path, if they are the only audience for it.
 
 Declaring a Plugin Registry
 ===========================
@@ -181,20 +280,22 @@ The contents are described below.
 ``layers``
    An ordered list of the plugin registry's layers. Each list element consists of the following three-element mapping:
 
-      ``id``
-         A short identifier for the plugin registry layer, for example ``production`` or ``testing``.
+   ``id``
+      A short identifier for the plugin registry layer, for example ``production`` or ``testing``.
 
-      ``name``
-         A display name for the plugin regisry layer, for example ``My Plugin Registry Testing Layer`` or ``My Plugin Registry (Testing)``.
+   ``name``
+      A display name for the plugin regisry layer, for example ``My Plugin Registry Testing Layer`` or ``My Plugin Registry (Testing)``.
 
-      ``path``
-         A directory path where the root of the plugin registry layer can be found.
+   ``path``
+      A directory path where the root of the plugin registry layer can be found.
 
 ``plugin-identifiers``
    A list of plugin identifiers contained in the plugin registry.
 
 ``suppressed-plugin-identifiers``
-   A list of plugin identifiers excluded by the plugin registry. Turtles does not currently do anything with this information but it could be used to record plugins that have been abandoned or retracted over the lifetime of the plugin registry.
+   A list of plugin identifiers excluded by the plugin registry.
+
+   Turtles does not currently do anything with this information but it could be used to record plugins that have been abandoned or retracted over the lifetime of the plugin registry.
 
 Plugin Registry Layouts
 =======================
@@ -204,16 +305,32 @@ The following plugin registry layout types are supported:
 ``directory``
    Each layer consists of a directory on the file system where signed plugin JARs are stored, which is then typically served by a Web server. The directory for each layer is designated by the layer's ``path`` property.
 
-   Currently, this layout does not look for optional configuration information in the ``options`` mapping.
+   **System prerequisites.** This layout does not have any additional system prerequisites.
+
+   **Options.** This layout does not look for optional configuration information in the ``options`` mapping.
 
 ``rcs``
    A specialization of the ``directory`` type, that also keeps successive versions of a given JAR locally in RCS. The directory for each layer is designated by the layer's ``path`` property as in the ``directory`` type, and additionally this layout expects an ``RCS`` directory to exist in the layer directory.
 
-   Currently, this layout does not look for optional configuration information in the ``options`` mapping.
-
-   **System prerequisites.** This builder requires:
+   **System prerequisites.** This layout requires:
 
    *  RCS
+
+   **Options.** This layout accepts the following options::
+
+      layout:
+        type: rcs
+        options:
+          file-naming-convention: ...
+
+   ``file-naming-convention``
+      A rule for what to each deployed JAR file given an original file named after the plugin's identifier, for example ``edu.myuniversity.plugin.publisherx.PublisherXPlugin.jar``:
+
+      ``abbreviated``
+         Shorten the file name to its last component, for example ``edu.myuniversity.plugin.publisherx.PublisherXPlugin.jar`` is deployed as ``PublisherXPlugin.jar``.
+
+      ``full``
+         **Default.** Use the original file name, unchanged.
 
 Other layout types could be defined to support other uses cases out there, and/or the tool could be extended to allow for custom layout types to be registered.
 
@@ -456,4 +573,4 @@ Help message (``turtles release-plugin --help``)::
 Tabular Output Format
 =====================
 
-Turtles' tabular output is performed by the `tabulate <https://pypi.org/project/tabulate/>`_ library through the ``--output-format`` option. See https://github.com/astanin/python-tabulate#table-format for a visual reference of the various output formats available.
+Turtles' tabular output is performed by the `tabulate <https://pypi.org/project/tabulate/>`_ library through the ``--output-format`` option. See https://github.com/astanin/python-tabulate#table-format for a visual reference of the various output formats available. The **default** is ``simple``.
