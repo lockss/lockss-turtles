@@ -34,7 +34,7 @@ Quick Start
 
 *  Install Turtles' Python dependencies::
 
-      pip3 install {OPTIONS...] --requirement requirements.txt
+      pip3 install [OPTIONS...] --requirement requirements.txt
 
 *  To build plugins from plugin sets (``build-plugin``, ``release-plugin``), configure one or more plugin sets in ``plugin-sets.yaml`` (for example ``~/.config/turtles/plugin-sets.yaml``)::
 
