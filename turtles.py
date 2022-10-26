@@ -338,8 +338,7 @@ class RcsPluginRegistryLayer(DirectoryPluginRegistryLayer):
         elif conv == RcsPluginRegistry.FULL or conv is None:
             return super()._get_dstfile(plugid)
         else:
-            raise RuntimeError(
-                f'{self.plugin_registry().id()}: unknown file naming convention in layout options: {conv}')
+            raise RuntimeError(f'{self.plugin_registry().id()}: unknown file naming convention in layout options: {conv}')
 
 
 class PluginSet(object):
@@ -880,7 +879,7 @@ class TurtlesCli(Turtles):
         container.add_argument('--output-format',
                                metavar='FMT',
                                choices=tabulate.tabulate_formats,
-                               default='tsv',
+                               default='simple',
                                help='set tabular output format to %(metavar)s (default: %(default)s; choices: %(choices)s)')
 
     def _make_option_password(self, container):
