@@ -6,7 +6,7 @@ Release Notes
 0.2.0
 -----
 
-Released: FIXME
+Released: 2022-10-26
 
 .. rubric:: Features
 
