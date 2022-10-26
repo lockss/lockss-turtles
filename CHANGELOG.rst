@@ -3,6 +3,24 @@ Release Notes
 =============
 
 -----
+0.2.0
+-----
+
+Released: 2022-10-26
+
+.. rubric:: Features
+
+*  ``MavenPluginSet``, for Maven projects inheriting from ``org.lockss:lockss-plugins-parent-pom``.
+
+*  ``AntPluginSet``: file naming convention layout option.
+
+*  Tabular output now includes the plugin version.
+
+.. rubric:: Bug Fixes
+
+*  ``AntPluginSet``: run ``ant load-plugins`` before building plugins.
+
+-----
 0.1.1
 -----
 
@@ -26,6 +44,8 @@ Initial release.
 
 *  ``AntPluginSet``, based on the classic ``lockss-daemon`` Ant builder.
 
-*  Simple ``DirectoryPluginRegistry``, and ``RcsPluginRegistry``, based on the classic RCS layout.
+*  ``DirectoryPluginRegistry``, for a simple layout.
+
+*  ``RcsPluginRegistry``, based on the classic RCS layout.
 
 *  Tabular output by `tabulate <https://pypi.org/project/tabulate/>`_.
