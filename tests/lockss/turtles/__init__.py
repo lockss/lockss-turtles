@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/usr/bin/env python3
 
-# Copyright (c) 2000-2022, Board of Trustees of Leland Stanford Jr. University
+# Copyright (c) 2000-2023, Board of Trustees of Leland Stanford Jr. University
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -27,27 +27,3 @@
 # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-
-if command -v realpath > /dev/null ; then
-  REALPATH='realpath'
-elif command -v grealpath > /dev/null ; then
-  REALPATH='grealpath'
-elif command -v readlink > /dev/null ; then
-  REALPATH='readlink -f'
-else
-  echo "${0}: no realpath executable on the PATH" >&2
-  exit 1
-fi
-
-_0="$($REALPATH "${0}")"
-
-if command -v python3 > /dev/null ; then
-  PYTHON3='python3'
-elif command -v python > /dev/null && [ "$(python -c 'import sys ; print(sys.version_info.major)')" = '3' ] ; then
-  PYTHON3='python'
-else
-  echo "${_0}: no Python 3 executable on the PATH" >&2
-  exit 1
-fi
-
-"${PYTHON3}" "$(cd "$(dirname "${_0}")" && pwd)/$(basename "${_0}").py" "$@"

@@ -1,4 +1,6 @@
-# Copyright (c) 2000-2022, Board of Trustees of Leland Stanford Jr. University
+#!/usr/bin/env python3
+
+# Copyright (c) 2000-2023, Board of Trustees of Leland Stanford Jr. University
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -26,21 +28,28 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# java-manifest
-# https://pypi.org/project/java-manifest/
-# https://github.com/elihunter173/java-manifest-py
-java-manifest
+from pathlib import Path, PurePath
+import json
 
-# PyYAML
-# https://pypi.org/project/PyYAML/
-# https://pyyaml.org/wiki/PyYAMLDocumentation
-pyyaml
+import jsonschema
+import jsonschema.exceptions
+import yaml
 
-# tabulate
-# https://pypi.org/project/tabulate/
-# https://github.com/astanin/python-tabulate
-tabulate
 
-# xdg
-# https://pypi.org/project/xdg/
-xdg
+def _load_and_validate(schema_path, instance_path, multiple=False):
+    with schema_path.open('r') as f:
+        schema = json.load(f)
+    with instance_path.open('r') as f:
+        ret = list(yaml.safe_load_all(f) if multiple else [yaml.safe_load(f)])
+    for instance in ret:
+        try:
+            jsonschema.validate(instance, schema)
+        except jsonschema.exceptions.ValidationError as validation_exception:
+            raise Exception(validation_exception.message) from validation_exception
+    return ret if multiple else ret[0]
+
+
+def _path(purepath_or_string):
+    if not issubclass(type(purepath_or_string), PurePath):
+        purepath_or_string = Path(purepath_or_string)
+    return purepath_or_string.expanduser().resolve()

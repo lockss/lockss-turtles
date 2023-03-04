@@ -1,4 +1,6 @@
-# Copyright (c) 2000-2022, Board of Trustees of Leland Stanford Jr. University
+#!/usr/bin/env python3
+
+# Copyright (c) 2000-2023, Board of Trustees of Leland Stanford Jr. University
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -26,16 +28,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Python venv
-/**/__pycache__
-/**/*.py[cod]
-/.venv
+import lockss.turtles.cli
 
-# Poetry
-/dist
-
-# Eclipse
-/.project
-
-# IntelliJ/PyCharm
-/.idea
+lockss.turtles.cli.main()

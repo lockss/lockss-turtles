@@ -8,6 +8,26 @@ Release Notes
 
 Released: FIXME
 
+.. rubric:: Features
+
+*  Completely refactored to be in the package ``lockss.turtles``.
+
+*  Using Poetry to make uploadable to and installable from PyPI as `lockss-turtles <https://pypi.org/project/lockss-turtles>`_. Removed the requirements file.
+
+*  Validate the various YAML objects (like a ``PluginSet``) against a `JSON Schema <https://json-schema.org/>`_.
+
+.. rubric:: Changes
+
+*  Temporarily disabled the ``analyze-registry`` command.
+
+*  ``$XDG_CONFIG_HOME/turtles`` (by default ``$HOME/.config/turtles``) is now ``$XDG_CONFIG_HOME/lockss.turtles`` (by default ``$HOME/.config/lockss.turtles``) or ``/etc/lockss.turtles`` (formerly ``turtles``).
+
+*  ``settings.yaml`` is now ``plugin-signing.yaml`` and its ``kind`` is now ``PluginSigning``. The corresponding command line option ``--settings`` is now ``--plugin-signing``.
+
+*  ``plugin-sets.yaml``, its kind ``PluginSets``, its key ``plugin-sets``, and the command line option ``--plugin-sets`` are now ``plugin-set-catalog.yaml``, ``PluginSetCatalog``, ``plugin-set-files`` and ``--plugin-set-catalog``, respectively. The builder ``options`` key is deprecated.
+
+*  ``plugin-registries.yaml``, its kind ``PluginRegistries``, its key ``plugin-registries``, and the command line option ``--plugin-registries`` are now ``plugin-registry-catalog.yaml``, ``PluginRegistryCatalog``, ``plugin-registry-files`` and ``--plugin-registry-catalog``, respectively. The ``file-naming-convention`` key is now directly under ``layout`` and the value ``full`` is now ``identifier``. The layout ``options`` key is deprecated.
+
 -----
 0.2.0
 -----

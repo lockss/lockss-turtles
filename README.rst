@@ -2,7 +2,47 @@
 Turtles
 =======
 
+.. image:: images/turtles-logo-640x640.png
+   :width: 160px
+   :height: 160px
+   :align: right
+   :alt: Turtles logo
+
 Turtles is a tool to manage LOCKSS plugin sets and LOCKSS plugin registries.
+
+**Latest release:** 0.3.0-dev2 (2023-03-03)
+
+-------------
+Prerequisites
+-------------
+
+*  Python 3.7 or greater.
+
+------------
+Installation
+------------
+
+Turtles is available from PyPI as ``lockss-turtles``: https://pypi.org/project/lockss-turtles
+
+You can install it with ``pip``, in your native environment or in a virtual environment:
+
+.. code:: shell
+
+   pip3 install lockss-turtles
+
+The installation process adds a ``turtles`` executable to the ``PATH``. You can check that the installation is functional by running ``turtles version`` or ``turtles --help``.
+
+-------------------
+Configuration Files
+-------------------
+
+
+
+----------------
+Building Plugins
+----------------
+
+Turtles can be used to build (package and sign) LOCKSS plugins
 
 Turtles supports `Plugin Sets`_ using a Maven layout inheriting from ``org.lockss:lockss-plugins-parent-pom`` or the legacy Ant layout of ``lockss-daemon``, and `Plugin Registries`_ with flat directory structures (optionally with RCS versioning) on the local file system.
 

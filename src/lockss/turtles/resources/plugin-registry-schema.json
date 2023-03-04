@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assets.lockss.org/schemas/json/plugin-registry-schema.json",
+  "title": "Plugin Registry",
+  "description": "LOCKSS plugin registry",
+  "type": "object",
+  "required": [
+    "kind",
+    "id",
+    "name",
+    "layout",
+    "layers",
+    "plugin-identifiers"
+  ],
+  "properties": {
+    "kind": {
+      "description": "This object's kind",
+      "type": "string",
+      "const": "PluginRegistry"
+    },
+    "id": {
+      "description": "An identifier for the plugin registry",
+      "type": "string"
+    },
+    "name": {
+      "description": "A name for the plugin registry",
+      "type": "string"
+    },
+    "layout": {
+      "description": "A plugin registry layout",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "description": "A plugin registry layout type",
+          "enum": [
+            "directory",
+            "rcs"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "rcs"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "file-naming-convention": {
+                "description": "The plugin registry file naming convention",
+                "enum": [
+                  "identifier",
+                  "abbreviated"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "layers": {
+      "description": "A list of plugin registry layers",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "path"
+        ],
+        "properties": {
+          "id": {
+            "description": "An identifier for the plugin registry layer",
+            "type": "string"
+          },
+          "name": {
+            "description": "A name for the plugin registry layer",
+            "type": "string"
+          },
+          "path": {
+            "description": "A root path for the plugin registry layer",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "plugin-identifiers": {
+      "description": "A list of plugin identifiers in the plugin registry",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type":"string"
+      }
+    }
+  }
+}
