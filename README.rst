@@ -17,7 +17,7 @@ Turtles
 
 Turtles is a tool to manage LOCKSS plugin sets and LOCKSS plugin registries.
 
-**Latest release:** 0.3.0-dev8 (2023-03-06)
+**Latest release:** 0.3.0-dev9 (2023-03-06)
 
 -------------
 Prerequisites
