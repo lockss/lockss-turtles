@@ -102,9 +102,6 @@ class PluginRegistry(object):
     def layout_type(self):
         return self._parsed['layout']['type']
 
-    def layout_options(self):
-        return self._parsed['layout'].get('options', dict())
-
     def name(self):
         return self._parsed['name']
 
@@ -150,6 +147,7 @@ class PluginRegistryLayer(object):
 
 
 class DirectoryPluginRegistry(PluginRegistry):
+
     LAYOUT = 'directory'
 
     def __init__(self, parsed):
@@ -205,6 +203,8 @@ class DirectoryPluginRegistryLayer(PluginRegistryLayer):
 
 class RcsPluginRegistry(DirectoryPluginRegistry):
 
+    LAYOUT = 'rcs'
+
     IDENTIFIER = 'identifier'
 
     ABBREVIATED = 'abbreviated'
@@ -220,6 +220,9 @@ class RcsPluginRegistryLayer(DirectoryPluginRegistryLayer):
 
     def __init__(self, plugin_registry, parsed):
         super().__init__(plugin_registry, parsed)
+
+    def get_file_naming_convention(self):
+        return self.plugin_registry()._parsed['layout'].get('file-naming-convention', RcsPluginRegistry.IDENTIFIER)
 
     def _copy_jar(self, src_path, dst_path, interactive=False):
         basename = dst_path.name
@@ -239,11 +242,10 @@ class RcsPluginRegistryLayer(DirectoryPluginRegistryLayer):
         subprocess.run(cmd, check=True, cwd=self.path())
 
     def _get_dstfile(self, plugid):
-        conv = self.plugin_registry().layout_options().get('file-naming-convention')
-        if conv == RcsPluginRegistry.ABBREVIATED:
-            return f'{plugid.split(".")[-1]}.jar'
-        elif conv == RcsPluginRegistry.IDENTIFIER or conv is None:
+        conv = self.get_file_naming_convention()
+        if conv == RcsPluginRegistry.IDENTIFIER:
             return super()._get_dstfile(plugid)
+        elif conv == RcsPluginRegistry.ABBREVIATED:
+            return f'{plugid.split(".")[-1]}.jar'
         else:
-            raise RuntimeError(
-                f'{self.plugin_registry().id()}: unknown file naming convention in layout options: {conv}')
+            raise RuntimeError(f'{self.plugin_registry().id()}: unknown file naming convention: {conv}')

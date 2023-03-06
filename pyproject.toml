@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lockss-turtles"
-version = "0.3.0-dev2"
+version = "0.3.0-dev8"
 description = "Tool to manage LOCKSS plugin sets and LOCKSS plugin repositories"
 license = "BSD-3-Clause"
 authors = [
@@ -8,7 +8,7 @@ authors = [
 ]
 readme = "README.rst"
 homepage = "https://www.lockss.org/"
-repository = "https://github.com/lockss/turtles"
+repository = "https://github.com/lockss/lockss-turtles"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",

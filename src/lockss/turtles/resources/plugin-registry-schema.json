@@ -98,6 +98,13 @@
       "items": {
         "type":"string"
       }
+    },
+    "suppressed-plugin-identifiers": {
+      "description": "A list of plugin identifiers excluded from the plugin registry",
+      "type": "array",
+      "items": {
+        "type":"string"
+      }
     }
   }
 }

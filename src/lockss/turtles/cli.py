@@ -52,6 +52,8 @@ def _file_lines(path):
 
 class TurtlesCli(object):
 
+    PROG = 'turtles'
+
     def __init__(self):
         super().__init__()
         self._app = TurtlesApp()
@@ -130,7 +132,7 @@ class TurtlesCli(object):
     def _build_plugin(self):
         # Prerequisites
         self._app.load_plugin_sets(self._args.plugin_set_catalog)
-        self._app.load_plugin_signing(self._args.plugin_signing)
+        self._app.load_plugin_signing_credentials(self._args.plugin_signing_credentials)
         self._obtain_password()
         # Action
         # ... plugin_id -> (set_id, jar_path, plugin)
@@ -145,7 +147,7 @@ class TurtlesCli(object):
 
     def _deploy_plugin(self):
         # Prerequisites
-        self._app.load_plugin_registries(self._args.plugin_registries)
+        self._app.load_plugin_registries(self._args.plugin_registry_catalog)
         # Action
         # ... (src_path, plugin_id) -> list of (registry_id, layer_id, dst_path, plugin)
         ret = self._app.deploy_plugin(self._get_jars(),
@@ -215,22 +217,22 @@ class TurtlesCli(object):
                                help='set the plugin signing password')
 
     def _make_option_plugin_registry_catalog(self, container):
-        container.add_argument('--plugin-registry-catalog',
+        container.add_argument('--plugin-registry-catalog', '-r',
                                metavar='FILE',
                                type=Path,
                                help=f'load plugin registry catalog from %(metavar)s (default: {" or ".join(map(str, self._app.default_plugin_registry_catalogs()))})')
 
     def _make_option_plugin_set_catalog(self, container):
-        container.add_argument('--plugin-set-catalog',
+        container.add_argument('--plugin-set-catalog', '-s',
                                metavar='FILE',
                                type=Path,
                                help=f'load plugin set catalog from %(metavar)s (default: {" or ".join(map(str, self._app.default_plugin_set_catalogs()))})')
 
-    def _make_option_plugin_signing(self, container):
-        container.add_argument('--plugin-signing',
+    def _make_option_plugin_signing_credentials(self, container):
+        container.add_argument('--plugin-signing-credentials', '-c',
                                metavar='FILE',
                                type=Path,
-                               help=f'load plugin signing settings from %(metavar)s (default: {" or ".join(map(str, self._app.default_plugin_signing()))})')
+                               help=f'load plugin signing credentials from %(metavar)s (default: {" or ".join(map(str, self._app.default_plugin_signing_credentials()))})')
 
     def _make_option_production(self, container):
         container.add_argument('--production', '-p',
@@ -292,7 +294,7 @@ class TurtlesCli(object):
                                help='add the layers in %(metavar)s to the list of plugin registry layers to process')
 
     def _make_parser(self):
-        self._parser = argparse.ArgumentParser(prog=__package__)
+        self._parser = argparse.ArgumentParser(prog=TurtlesCli.PROG)
         self._subparsers = self._parser.add_subparsers(title='commands',
                                                        description="Add --help to see the command's own help message",
                                                        # With subparsers, metavar is also used as the heading of the column of subcommands
@@ -328,7 +330,7 @@ class TurtlesCli(object):
         self._make_options_identifiers(parser)
         self._make_option_password(parser)
         self._make_option_plugin_set_catalog(parser)
-        self._make_option_plugin_signing(parser)
+        self._make_option_plugin_signing_credentials(parser)
 
     def _make_parser_copyright(self, container):
         parser = container.add_parser('copyright',
@@ -363,7 +365,7 @@ class TurtlesCli(object):
         self._make_option_password(parser)
         self._make_option_plugin_registry_catalog(parser)
         self._make_option_plugin_set_catalog(parser)
-        self._make_option_plugin_signing(parser)
+        self._make_option_plugin_signing_credentials(parser)
         self._make_option_production(parser)
         self._make_option_testing(parser)
 
@@ -391,8 +393,8 @@ class TurtlesCli(object):
     def _release_plugin(self):
         # Prerequisites
         self._app.load_plugin_sets(self._args.plugin_set_catalog)
-        self._app.load_plugin_registries(self._args.plugin_registries)
-        self._app.load_plugin_signing(self._args.plugin_signing)
+        self._app.load_plugin_registries(self._args.plugin_registry_catalog)
+        self._app.load_plugin_signing_credentials(self._args.plugin_signing_credentials)
         self._obtain_password()
         # Action
         # ... plugin_id -> list of (registry_id, layer_id, dst_path, plugin)

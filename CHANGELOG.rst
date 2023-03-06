@@ -6,7 +6,7 @@ Release Notes
 0.3.0
 -----
 
-Released: FIXME
+Released: 2023-03-06
 
 .. rubric:: Features
 

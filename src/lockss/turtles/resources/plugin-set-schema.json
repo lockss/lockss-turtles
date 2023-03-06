@@ -4,6 +4,12 @@
   "title": "Plugin Set",
   "description": "LOCKSS plugin set",
   "type": "object",
+  "required": [
+    "kind",
+    "id",
+    "name",
+    "builder"
+  ],
   "properties": {
     "kind": {
       "description": "This object's kind",
@@ -21,6 +27,9 @@
     "builder": {
       "description": "A plugin builder",
       "type": "object",
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "description": "A plugin builder type",
@@ -30,10 +39,7 @@
           ]
         }
       },
-      "required": [
-        "type"
-      ],
-      "anyOf": [
+      "allOf": [
         {
           "if": {
             "properties": {
@@ -45,12 +51,14 @@
           "then": {
             "properties": {
               "main": {
-                "description": "The plugin set's main tree path",
-                "type": "string"
+                "description": "The path (relative to the root of the project) to the plugins' source code",
+                "type": "string",
+                "default": "plugins/src"
               },
               "test": {
-                "description": "The plugin set's test tree path",
-                "type": "string"
+                "description": "The path (relative to the root of the project) to the plugins' unit tests",
+                "type": "string",
+                "default": "plugins/test/src"
               }
             }
           }
@@ -66,23 +74,19 @@
           "then": {
             "properties": {
               "main": {
-                "description": "The plugin set's main tree path",
-                "type": "string"
+                "description": "The path (relative to the root of the project) to the plugins' source code",
+                "type": "string",
+                "default": "src/main/java"
               },
               "test": {
-                "description": "The plugin set's test tree path",
-                "type": "string"
+                "description": "The path (relative to the root of the project) to the plugins' unit tests",
+                "type": "string",
+                "default": "src/test/java"
               }
             }
           }
         }
       ]
     }
-  },
-  "required": [
-    "kind",
-    "id",
-    "name",
-    "builder"
-  ]
+  }
 }

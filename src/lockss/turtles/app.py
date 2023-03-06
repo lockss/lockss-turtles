@@ -44,17 +44,19 @@ class TurtlesApp(object):
 
     XDG_CONFIG_DIR = xdg.xdg_config_home().joinpath(__package__)
 
-    GLOBAL_CONFIG_DIR = Path('/etc', __package__)
+    USR_CONFIG_DIR = Path('/usr/local/share', __package__)
 
-    CONFIG_DIRS = [XDG_CONFIG_DIR, GLOBAL_CONFIG_DIR]
+    ETC_CONFIG_DIR = Path('/etc', __package__)
+
+    CONFIG_DIRS = [XDG_CONFIG_DIR, USR_CONFIG_DIR, ETC_CONFIG_DIR]
 
     PLUGIN_REGISTRY_CATALOG = 'plugin-registry-catalog.yaml'
 
     PLUGIN_SET_CATALOG = 'plugin-set-catalog.yaml'
 
-    PLUGIN_SIGNING = 'plugin-signing.yaml'
+    PLUGIN_SIGNING_CREDENTIALS = 'plugin-signing-credentials.yaml'
 
-    PLUGIN_SIGNING_SCHEMA = 'plugin-signing-schema.json'
+    PLUGIN_SIGNING_CREDENTIALS_SCHEMA = 'plugin-signing-credentials-schema.json'
 
     @staticmethod
     def _default_files(file_str):
@@ -78,7 +80,7 @@ class TurtlesApp(object):
         self._password = None
         self._plugin_registries = None
         self._plugin_sets = None
-        self._plugin_signing = None
+        self._plugin_signing_credentials = None
 
     # Returns plugin_id -> (set_id, jar_path, plugin)
     def build_plugin(self, plugin_ids):
@@ -90,8 +92,8 @@ class TurtlesApp(object):
     def default_plugin_set_catalogs(self):
         return TurtlesApp._default_files(TurtlesApp.PLUGIN_SET_CATALOG)
 
-    def default_plugin_signing(self):
-        return TurtlesApp._default_files(TurtlesApp.PLUGIN_SIGNING)
+    def default_plugin_signing_credentials(self):
+        return TurtlesApp._default_files(TurtlesApp.PLUGIN_SIGNING_CREDENTIALS)
 
     # Returns (src_path, plugin_id) -> list of (registry_id, layer_id, dst_path, plugin)
     def deploy_plugin(self, src_paths, layer_ids, interactive=False):
@@ -115,11 +117,11 @@ class TurtlesApp(object):
             for plugin_set_file in plugin_set_catalog.plugin_set_files():
                 self._plugin_sets.extend(PluginSet.from_path(plugin_set_file))
 
-    def load_plugin_signing(self, plugin_signing_path=None):
-        if self._plugin_signing is None:
-            plugin_signing_path = _path(plugin_signing_path) if plugin_signing_path else self._select_file(TurtlesApp.PLUGIN_SIGNING)
-            plugin_signing_schema_path = importlib.resources.path(lockss.turtles.resources, TurtlesApp.PLUGIN_SIGNING_SCHEMA)
-            self._plugin_signing = _load_and_validate(plugin_signing_schema_path, plugin_signing_path)
+    def load_plugin_signing_credentials(self, plugin_signing_credentials_path=None):
+        if self._plugin_signing_credentials is None:
+            plugin_signing_credentials_path = _path(plugin_signing_credentials_path) if plugin_signing_credentials_path else self._select_file(TurtlesApp.PLUGIN_SIGNING_CREDENTIALS)
+            plugin_signing_credentials_schema_path = importlib.resources.path(lockss.turtles.resources, TurtlesApp.PLUGIN_SIGNING_CREDENTIALS_SCHEMA)
+            self._plugin_signing_credentials = _load_and_validate(plugin_signing_credentials_schema_path, plugin_signing_credentials_path)
 
     # Returns plugin_id -> list of (registry_id, layer_id, dst_path, plugin)
     def release_plugin(self, plugin_ids, layer_ids, interactive=False):
@@ -138,8 +140,8 @@ class TurtlesApp(object):
     def select_plugin_set_catalog(self, preselected=None):
         return TurtlesApp._select_file(TurtlesApp.PLUGIN_SET_CATALOG, preselected)
 
-    def select_plugin_signing(self, preselected=None):
-        return TurtlesApp._select_file(TurtlesApp.PLUGIN_SIGNING, preselected)
+    def select_plugin_signing_credentials(self, preselected=None):
+        return TurtlesApp._select_file(TurtlesApp.PLUGIN_SIGNING_CREDENTIALS, preselected)
 
     def set_password(self, pw):
         self._password = pw if callable(pw) else lambda x: pw
@@ -176,10 +178,10 @@ class TurtlesApp(object):
         return self._password() if self._password else None
 
     def _get_plugin_signing_alias(self):
-        return self._plugin_signing['plugin-signing-alias']
+        return self._plugin_signing_credentials['plugin-signing-alias']
 
     def _get_plugin_signing_keystore(self):
-        return self._plugin_signing['plugin-signing-keystore']
+        return self._plugin_signing_credentials['plugin-signing-keystore']
 
     def _get_plugin_signing_password(self):
         return self._get_password()
