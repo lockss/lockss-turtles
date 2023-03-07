@@ -17,7 +17,7 @@ Turtles
 
 Turtles is a tool to manage LOCKSS plugin sets and LOCKSS plugin registries.
 
-**Latest release:** 0.3.1 (2023-03-07)
+**Latest release:** 0.4.0-dev1 (?)
 
 -------------
 Prerequisites
@@ -749,31 +749,3 @@ The ``version`` command  displays the usage message of all the Turtles `Commands
 ===========
 
 The ``version`` command  displays the version number of Turtles and exits.
-
---------
-Examples
---------
-
-Releasing (building and deploying) plugins::
-
-   # Help message:
-   turtles release-plugin --help
-
-   # List of plugin identifiers
-   # Deploy to 'testing' layer only
-   turtles release-plugin --testing edu.myuniversity.plugin.publisherx.PublisherXPlugin edu.myuniversity.plugin.publishery.PublisherYPlugin ...
-   # Abbreviation
-   turtles rp -t edu.myuniversity.plugin.publisherx.PublisherXPlugin edu.myuniversity.plugin.publishery.PublisherYPlugin ...
-
-   # Alternative invocation
-   # Deploy to 'production' layer only
-   turtles release-plugin --production --identifier=edu.myuniversity.plugin.publisherx.PublisherXPlugin --identifier=edu.myuniversity.plugin.publishery.PublisherYPlugin ...
-   # Abbreviation
-   turtles rp -p -i edu.myuniversity.plugin.publisherx.PublisherXPlugin -i edu.myuniversity.plugin.publishery.PublisherYPlugin ...
-
-   # Alternative invocation
-   # /tmp/pluginids.txt has one plugin identifier per line
-   # Deploy to both 'testing' and 'production' layers
-   turtles release-plugin --testing --production --identifiers=/tmp/pluginids.txt
-   # Abbreviation
-   turtles rp -tp -I /tmp/pluginids.txt
