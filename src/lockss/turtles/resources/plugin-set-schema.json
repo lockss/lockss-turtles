@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assets.lockss.org/schemas/json/plugin-set-schema.json",
+  "title": "Plugin Set",
+  "description": "LOCKSS plugin set",
+  "type": "object",
+  "required": [
+    "kind",
+    "id",
+    "name",
+    "builder"
+  ],
+  "properties": {
+    "kind": {
+      "description": "This object's kind",
+      "type": "string",
+      "const": "PluginSet"
+    },
+    "id": {
+      "description": "An identifier for the plugin set",
+      "type": "string"
+    },
+    "name": {
+      "description": "A name for the plugin set",
+      "type": "string"
+    },
+    "builder": {
+      "description": "A plugin builder",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "description": "A plugin builder type",
+          "enum": [
+            "ant",
+            "mvn"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "ant"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "main": {
+                "description": "The path (relative to the root of the project) to the plugins' source code",
+                "type": "string",
+                "default": "plugins/src"
+              },
+              "test": {
+                "description": "The path (relative to the root of the project) to the plugins' unit tests",
+                "type": "string",
+                "default": "plugins/test/src"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "mvn"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "main": {
+                "description": "The path (relative to the root of the project) to the plugins' source code",
+                "type": "string",
+                "default": "src/main/java"
+              },
+              "test": {
+                "description": "The path (relative to the root of the project) to the plugins' unit tests",
+                "type": "string",
+                "default": "src/test/java"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
