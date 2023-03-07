@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lockss-turtles"
-version = "0.3.0"
+version = "0.3.1"
 description = "Tool to manage LOCKSS plugin sets and LOCKSS plugin registries"
 license = "BSD-3-Clause"
 authors = [
