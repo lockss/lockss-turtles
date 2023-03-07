@@ -3,6 +3,16 @@ Release Notes
 =============
 
 -----
+0.3.1
+-----
+
+Released: 2023-03-07
+
+.. rubric:: Bug Fixes
+
+*  Fixed use of the ``importlib.resources`` library.
+
+-----
 0.3.0
 -----
 

@@ -44,9 +44,9 @@ class PluginRegistryCatalog(object):
     @staticmethod
     def from_path(plugin_registry_catalog_path):
         plugin_registry_catalog_path = _path(plugin_registry_catalog_path)
-        plugin_registry_catalog_schema_path = importlib.resources.path(lockss.turtles.resources, PluginRegistryCatalog.PLUGIN_REGISTRY_CATALOG_SCHEMA)
-        parsed = _load_and_validate(plugin_registry_catalog_schema_path, plugin_registry_catalog_path)
-        return PluginRegistryCatalog(parsed)
+        with importlib.resources.path(lockss.turtles.resources, PluginRegistryCatalog.PLUGIN_REGISTRY_CATALOG_SCHEMA) as plugin_registry_catalog_schema_path:
+            parsed = _load_and_validate(plugin_registry_catalog_schema_path, plugin_registry_catalog_path)
+            return PluginRegistryCatalog(parsed)
 
     def __init__(self, parsed):
         super().__init__()
@@ -63,9 +63,9 @@ class PluginRegistry(object):
     @staticmethod
     def from_path(plugin_registry_file_path):
         plugin_registry_file_path = _path(plugin_registry_file_path)
-        plugin_registry_schema_path = importlib.resources.path(lockss.turtles.resources, PluginRegistry.PLUGIN_REGISTRY_SCHEMA)
-        lst = _load_and_validate(plugin_registry_schema_path, plugin_registry_file_path, multiple=True)
-        return [PluginRegistry._from_obj(parsed, plugin_registry_file_path) for parsed in lst]
+        with importlib.resources.path(lockss.turtles.resources, PluginRegistry.PLUGIN_REGISTRY_SCHEMA) as plugin_registry_schema_path:
+           lst = _load_and_validate(plugin_registry_schema_path, plugin_registry_file_path, multiple=True)
+           return [PluginRegistry._from_obj(parsed, plugin_registry_file_path) for parsed in lst]
 
     @staticmethod
     def _from_obj(parsed, plugin_registry_file_path):
