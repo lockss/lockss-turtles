@@ -47,9 +47,9 @@ class PluginSetCatalog(object):
     @staticmethod
     def from_path(plugin_set_catalog_path):
         plugin_set_catalog_path = _path(plugin_set_catalog_path)
-        plugin_set_catalog_schema_path = importlib.resources.path(lockss.turtles.resources, PluginSetCatalog.PLUGIN_SET_CATALOG_SCHEMA)
-        parsed = _load_and_validate(plugin_set_catalog_schema_path, plugin_set_catalog_path)
-        return PluginSetCatalog(parsed)
+        with importlib.resources.path(lockss.turtles.resources, PluginSetCatalog.PLUGIN_SET_CATALOG_SCHEMA) as plugin_set_catalog_schema_path:
+            parsed = _load_and_validate(plugin_set_catalog_schema_path, plugin_set_catalog_path)
+            return PluginSetCatalog(parsed)
 
     def __init__(self, parsed):
         super().__init__()
@@ -66,9 +66,9 @@ class PluginSet(object):
     @staticmethod
     def from_path(plugin_set_file_path):
         plugin_set_file_path = _path(plugin_set_file_path)
-        plugin_set_schema_path = importlib.resources.path(lockss.turtles.resources, PluginSet.PLUGIN_SET_SCHEMA)
-        lst = _load_and_validate(plugin_set_schema_path, plugin_set_file_path, multiple=True)
-        return [PluginSet._from_obj(parsed, plugin_set_file_path) for parsed in lst]
+        with importlib.resources.path(lockss.turtles.resources, PluginSet.PLUGIN_SET_SCHEMA) as plugin_set_schema_path:
+            lst = _load_and_validate(plugin_set_schema_path, plugin_set_file_path, multiple=True)
+            return [PluginSet._from_obj(parsed, plugin_set_file_path) for parsed in lst]
 
     @staticmethod
     def _from_obj(parsed, plugin_set_file_path):

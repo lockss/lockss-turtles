@@ -120,8 +120,8 @@ class TurtlesApp(object):
     def load_plugin_signing_credentials(self, plugin_signing_credentials_path=None):
         if self._plugin_signing_credentials is None:
             plugin_signing_credentials_path = _path(plugin_signing_credentials_path) if plugin_signing_credentials_path else self._select_file(TurtlesApp.PLUGIN_SIGNING_CREDENTIALS)
-            plugin_signing_credentials_schema_path = importlib.resources.path(lockss.turtles.resources, TurtlesApp.PLUGIN_SIGNING_CREDENTIALS_SCHEMA)
-            self._plugin_signing_credentials = _load_and_validate(plugin_signing_credentials_schema_path, plugin_signing_credentials_path)
+            with importlib.resources.path(lockss.turtles.resources, TurtlesApp.PLUGIN_SIGNING_CREDENTIALS_SCHEMA) as plugin_signing_credentials_schema_path:
+                self._plugin_signing_credentials = _load_and_validate(plugin_signing_credentials_schema_path, plugin_signing_credentials_path)
 
     # Returns plugin_id -> list of (registry_id, layer_id, dst_path, plugin)
     def release_plugin(self, plugin_ids, layer_ids, interactive=False):
