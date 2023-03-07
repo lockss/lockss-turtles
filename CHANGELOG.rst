@@ -6,7 +6,7 @@ Release Notes
 0.3.0
 -----
 
-Released: 2023-03-06
+Released: 2023-03-07
 
 .. rubric:: Features
 
