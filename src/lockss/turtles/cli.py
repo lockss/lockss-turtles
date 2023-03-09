@@ -143,7 +143,7 @@ class TurtlesCli(object):
                                 tablefmt=self._args.output_format))
 
     def _copyright(self):
-        print(lockss.turtles.__copyright__.rstrip())
+        print(lockss.turtles.__copyright__)
 
     def _deploy_plugin(self):
         # Prerequisites
@@ -191,7 +191,7 @@ class TurtlesCli(object):
         return self._layers
 
     def _license(self):
-        print(lockss.turtles.__license__.rstrip())
+        print(lockss.turtles.__license__)
 
     def _make_option_debug_cli(self, container):
         container.add_argument('--debug-cli',
@@ -418,7 +418,7 @@ class TurtlesCli(object):
                     print(f'{" " * len(usage)}{s[len(usage):]}' if s.startswith(usage) else s)
 
     def _version(self):
-        print(lockss.turtles.__version__.rstrip())
+        print(lockss.turtles.__version__)
 
 def main():
     TurtlesCli().run()

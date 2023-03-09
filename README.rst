@@ -65,7 +65,31 @@ or as a Python module::
 
 Help messages and this document use ``turtles`` throughout, but the two invocation styles are interchangeable.
 
-Turtles uses `Commands`_, in the style of programs like ``git``, ``dnf``/``yum``, ``apt``/``apt-get``, and the like. You can see the list of available `Commands`_ by invoking ``turtles --help``.
+Turtles uses `Commands`_, in the style of programs like ``git``, ``dnf``/``yum``, ``apt``/``apt-get``, and the like. You can see the list of available `Commands`_ by invoking ``turtles --help``, and you can find a usage summary of all the `Commands`_ by invoking ``turtles usage``::
+
+    usage: turtles [-h] [--debug-cli] [--non-interactive] [--output-format FMT] COMMAND ...
+
+           turtles build-plugin [-h] [--identifier PLUGID] [--identifiers FILE] [--password PASS] [--plugin-set-catalog FILE]
+                                [--plugin-signing-credentials FILE]
+                                [PLUGID ...]
+
+           turtles copyright [-h]
+
+           turtles deploy-plugin [-h] [--jar PLUGJAR] [--jars FILE] [--layer LAYER] [--layers FILE] [--plugin-registry-catalog FILE]
+                                 [--production] [--testing]
+                                 [PLUGJAR ...]
+
+           turtles license [-h]
+
+           turtles release-plugin [-h] [--identifier PLUGID] [--identifiers FILE] [--layer LAYER] [--layers FILE] [--password PASS]
+                                  [--plugin-registry-catalog FILE] [--plugin-set-catalog FILE] [--plugin-signing-credentials FILE]
+                                  [--production] [--testing]
+                                  [PLUGID ...]
+
+           turtles usage [-h]
+
+           turtles version [-h]
+
 
 -------------------
 Configuration Files
