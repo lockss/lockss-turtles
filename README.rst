@@ -544,7 +544,7 @@ Examples::
 ``copyright``
 =============
 
-The ``copyright`` command  displays the copyright notice for Turtles and exits.
+The ``copyright`` command displays the copyright notice for Turtles and exits.
 
 .. _deploy-plugin:
 
@@ -643,7 +643,7 @@ Examples::
 ``license``
 ===========
 
-The ``license`` command  displays the license terms for Turtles and exits.
+The ``license`` command displays the license terms for Turtles and exits.
 
 .. _release-plugin:
 
@@ -765,11 +765,11 @@ Examples::
 ``usage``
 =========
 
-The ``version`` command  displays the usage message of all the Turtles `Commands`_.
+The ``version`` command displays the usage message of all the Turtles `Commands`_.
 
 .. _version:
 
 ``version``
 ===========
 
-The ``version`` command  displays the version number of Turtles and exits.
+The ``version`` command displays the version number of Turtles and exits.

@@ -371,7 +371,7 @@ class TurtlesCli(object):
 
     def _make_parser_usage(self, container):
         parser = container.add_parser('usage',
-                                      description='Show usage and exit',
+                                      description='Show detailed usage and exit',
                                       help='show detailed usage and exit')
         parser.set_defaults(fun=self._usage)
 
