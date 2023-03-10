@@ -109,13 +109,43 @@ Some Turtles commands require a `Plugin Set Catalog`_, `Plugin Registry Catalog`
 Building Plugins
 ----------------
 
-To use Turtles to build (package and sign) LOCKSS plugins, you will need to define one or more `Plugin Sets`_, declare them in a `Plugin Set Catalog`_, and declare your `Plugin Signing Credentials`_. You then use the `build-plugin`_ command, or the `release-plugin`_ command (which amounts to `build-plugin`_ followed by `deploy-plugin`_).
+To use Turtles to build (package and sign) LOCKSS plugins, you will need to define one or more `Plugin Sets`_, list them in a `Plugin Set Catalog`_, and declare your `Plugin Signing Credentials`_.
+
+You then use the `build-plugin`_ command to build plugins, or the `release-plugin`_ command to build and deploy plugins (equivalent of `build-plugin`_ followed by `deploy-plugin`_).
+
+Plugin Identifier Arguments and Options
+=======================================
+
+Commands that are `Building Plugins`_ expect one or more plugin identifiers. The list of plugin identifiers to process is derived from:
+
+*  The plugin identifiers listed as bare arguments to the command.
+
+*  The plugin identifiers listed as |IDENTIFIER| options.
+
+*  The plugin identifiers found in the files listed as |IDENTIFIERS| options.
 
 -----------------
 Deploying Plugins
 -----------------
 
-To use Turtles to deploy LOCKSS plugins to LOCKSS plugin registries, you will need to define one or more `Plugin Registries`_ and declare them in a `Plugin Registry Catalog`_. You then use the `deploy-plugin`_ command, or the `release-plugin`_ command (which amounts to `build-plugin`_ followed by `deploy-plugin`_).
+To use Turtles to deploy LOCKSS plugins to LOCKSS plugin registries, you will need to define one or more `Plugin Registries`_ and declare them in a `Plugin Registry Catalog`_.
+
+You then use the `deploy-plugin`_ command to deploy plugin JARs, or the `release-plugin`_ command to build and deploy plugins from `Plugin Sets`_ (equivalent of `build-plugin`_ followed by `deploy-plugin`_).
+
+Plugin Registry Layer Options
+=============================
+
+Commands that are `Deploying Plugins`_ expect one or more plugin registry layer IDs. The list of plugin registry layer IDs to target is derived from:
+
+*  The plugin registry layer IDs listed as |JAR| options.
+
+*  The plugin registry layer IDs found in the files listed as |JARS| options.
+
+As a convenience, the following synonyms also exist:
+
+*  |TESTING| is a synonym for ``--layer=testing``
+
+*  |PRODUCTION| is a synonym for ``--layer=production``
 
 ------------------
 Plugin Set Catalog
@@ -504,17 +534,11 @@ The ``build-plugin`` command is used for `Building Plugins`_. It has its own |HE
 
 The command needs:
 
-*  `Plugin Signing Credentials`_, either via the |PLUGIN_SIGNING_CREDENTIALS| option or from the `Configuration Files`_.
+*  `Plugin Signing Credentials`_, either from the |PLUGIN_SIGNING_CREDENTIALS| option or from ``plugin-signing-credentials.yaml` in the `Configuration Files`_.
 
-*  A `Plugin Set Catalog`_, either via the |PLUGIN_SET_CATALOG| option or from the `Configuration Files`_.
+*  A `Plugin Set Catalog`_, either from the |PLUGIN_SET_CATALOG| option or from ``plugin-set-catalog.yaml`` in the `Configuration Files`_.
 
-*  One or more plugin identifiers. The list of plugin identifiers to process is derived from:
-
-   *  The identifiers listed as bare arguments to the command.
-
-   *  The identifiers listed as |IDENTIFIER| options.
-
-   *  The identifiers found in the files listed as |IDENTIFIERS| options.
+*  One or more plugin identifiers, from the `Plugin Identifier Arguments and Options`_ (bare arguments, |IDENTIFIER| options, |IDENTIFIERS| options).
 
 Examples::
 
@@ -590,27 +614,17 @@ The ``deploy-plugin`` command is used for `Deploying Plugins`_. It has its own |
 
 The command needs:
 
-*  A `Plugin Registry Catalog`_, either via the |PLUGIN_REGISTRY_CATALOG| option or from the `Configuration Files`_.
+*  One or more JAR paths. The list of JAR paths to process is derived from:
 
-*  One or more JAR paths. The list of paths to process is derived from:
+   *  The JAR paths listed as bare arguments to the command.
 
-   *  The paths listed as bare arguments to the command.
+   *  The JAR paths listed as |JAR| options.
 
-   *  The paths listed as |JAR| options.
+   *  The JAR paths found in the files listed as |JARS| options.
 
-   *  The paths found in the files listed as |JARS| options.
+*  A `Plugin Registry Catalog`_, either from the |PLUGIN_REGISTRY_CATALOG| option or from ``plugin-signing-credentials.yaml`` in the `Configuration Files`_.
 
-*  One or more plugin registry layer IDs. The list of layer IDs to process is derived from:
-
-   *  The layer IDs listed as |LAYER| options.
-
-   *  The layer IDs found in the files listed as |LAYERS| options.
-
-   Alternatively:
-
-   *  |TESTING| is a synonym for ``--layer=testing``.
-
-   *  |PRODUCTION| is a synonym for ``--layer=production``.
+*  One or more plugin registry layer IDs, from the `Plugin Registry Layer Options`_ (|IDENTIFIER| options, |IDENTIFIERS| options, and alternatively, |TESTING| options, |PRODUCTION| option).
 
 Examples::
 
@@ -708,31 +722,15 @@ The ``release-plugin`` command is used for `Building Plugins`_ and `Deploying Pl
 
 The command needs:
 
-*  `Plugin Signing Credentials`_, either via the |PLUGIN_SIGNING_CREDENTIALS| option or from the `Configuration Files`_.
+*  `Plugin Signing Credentials`_, either from the |PLUGIN_SIGNING_CREDENTIALS| option or from ``plugin-signing-credentials.yaml` in the `Configuration Files`_.
 
-*  A `Plugin Set Catalog`_, either via the |PLUGIN_SET_CATALOG| option or from the `Configuration Files`_.
+*  A `Plugin Set Catalog`_, either from the |PLUGIN_SET_CATALOG| option or from ``plugin-set-catalog.yaml`` in the `Configuration Files`_.
 
-*  One or more plugin identifiers. The list of plugin identifiers to process is derived from:
+*  One or more plugin identifiers, from the `Plugin Identifier Arguments and Options`_ (bare arguments, |IDENTIFIER| options, |IDENTIFIERS| options).
 
-   *  The identifiers listed as bare arguments to the command.
+*  A `Plugin Registry Catalog`_, either from the |PLUGIN_REGISTRY_CATALOG| option or from ``plugin-signing-credentials.yaml`` in the `Configuration Files`_.
 
-   *  The identifiers listed as |IDENTIFIER| options.
-
-   *  The identifiers found in the files listed as |IDENTIFIERS| options.
-
-*  A `Plugin Registry Catalog`_, either via the |PLUGIN_REGISTRY_CATALOG| option or from the `Configuration Files`_.
-
-*  One or more plugin registry layer IDs. The list of layer IDs to process is derived from:
-
-   *  The layer IDs listed as |LAYER| options.
-
-   *  The layer IDs found in the files listed as |LAYERS| options.
-
-   Alternatively:
-
-   *  |TESTING| is a synonym for ``--layer=testing``.
-
-   *  |PRODUCTION| is a synonym for ``--layer=production``.
+*  One or more plugin registry layer IDs, from the `Plugin Registry Layer Options`_ (|IDENTIFIER| options, |IDENTIFIERS| options, and alternatively, |TESTING| options, |PRODUCTION| option).
 
 Examples::
 
@@ -765,7 +763,7 @@ Examples::
 ``usage``
 =========
 
-The ``version`` command displays the usage message of all the Turtles `Commands`_.
+The ``usage`` command displays the usage message of all the Turtles `Commands`_.
 
 .. _version:
 
