@@ -34,7 +34,7 @@ __copyright__ = '''
 Copyright (c) 2000-2023, Board of Trustees of Leland Stanford Jr. University
 '''.strip()
 
-__license__ = __license__ = __copyright__ + '\n\n' + '''
+__license__ = __copyright__ + '\n\n' + '''
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
