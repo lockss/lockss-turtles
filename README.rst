@@ -221,13 +221,15 @@ Maven Plugin Set Builder
 
 This type of plugin set builder is for a Maven project inheriting from ``org.lockss:lockss-plugins-parent-pom``.
 
-.. rubric:: Prerequisites
+Prerequisites
+-------------
 
 *  Java Development Kit 8 (JDK).
 
 *  `Apache Maven <https://maven.apache.org/>`_.
 
-.. rubric:: Declaration
+Declaration
+-----------
 
 For this plugin set builder type, the ``builder`` object in the plugin set definition has the following structure:
 
@@ -245,7 +247,8 @@ Ant Plugin Set Builder
 
 This type of plugin set builder is for the LOCKSS 1.x (https://github.com/lockss/lockss-daemon) code tree, based on Ant.
 
-.. rubric:: Prerequisites
+Prerequisites
+-------------
 
 *  Java Development Kit 8 (JDK).
 
@@ -253,7 +256,8 @@ This type of plugin set builder is for the LOCKSS 1.x (https://github.com/lockss
 
 *  ``JAVA_HOME`` must be set appropriately.
 
-.. rubric:: Declaration
+Declaration
+-----------
 
 For this plugin set builder type, the ``builder`` object in the plugin set definition has the following structure:
 
@@ -368,11 +372,13 @@ Directory Plugin Registry Layout
 
 In this type of plugin registry layout, each layer consists of a directory on the local file system where signed plugin JARs are stored, which is then typically served by a Web server. The directory for each layer is designated by the layer's ``path`` property.
 
-.. rubric:: Prerequisites
+Prerequisites
+-------------
 
 None.
 
-.. rubric:: Declaration
+Declaration
+-----------
 
 For this plugin registry layout type, the ``layout`` object in the plugin registry definition has the following structure:
 

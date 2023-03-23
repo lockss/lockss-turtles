@@ -25,12 +25,12 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.7,<4.0"
-java-manifest = "1.1.0"
-jsonschema = "4.17.3"
-pyyaml = "6.0"
-tabulate = "0.9.0"
-xdg = "6.0.0"
+python = "^3.7"
+java-manifest = "^1.1.0"
+jsonschema = "^4.17.3"
+pyyaml = "^6.0"
+tabulate = "^0.9.0"
+xdg = "^6.0.0"
 
 [tool.poetry.scripts]
 turtles = 'lockss.turtles.cli:main'
