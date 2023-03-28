@@ -52,7 +52,7 @@ class PluginRegistryCatalog(object):
         super().__init__()
         self._parsed = parsed
 
-    def plugin_registry_files(self):
+    def get_plugin_registry_files(self):
         return self._parsed['plugin-registry-files']
 
 
@@ -81,32 +81,32 @@ class PluginRegistry(object):
         super().__init__()
         self._parsed = parsed
 
+    def get_id(self):
+        return self._parsed['id']
+
     def get_layer(self, layer_id):
         for layer in self.get_layers():
-            if layer.id() == layer_id:
+            if layer.get_id() == layer_id:
                 return layer
         return None
 
     def get_layer_ids(self):
-        return [layer.id() for layer in self.get_layers()]
+        return [layer.get_id() for layer in self.get_layers()]
 
     def get_layers(self):
         return [self._make_layer(layer_elem) for layer_elem in self._parsed['layers']]
 
-    def has_plugin(self, plugin_id):
-        return plugin_id in self.plugin_identifiers()
-
-    def id(self):
-        return self._parsed['id']
-
-    def layout_type(self):
+    def get_layout_type(self):
         return self._parsed['layout']['type']
 
-    def name(self):
+    def get_name(self):
         return self._parsed['name']
 
-    def plugin_identifiers(self):
+    def get_plugin_identifiers(self):
         return self._parsed['plugin-identifiers']
+
+    def has_plugin(self, plugin_id):
+        return plugin_id in self.get_plugin_identifiers()
 
     def _make_layer(self, parsed):
         raise NotImplementedError('_make_layer')
@@ -130,25 +130,33 @@ class PluginRegistryLayer(object):
     def get_file_for(self, plugin_id):
         raise NotImplementedError('get_file_for')
 
+    def get_id(self):
+        return self._parsed['id']
+
     def get_jars(self):
         raise NotImplementedError('get_jars')
 
-    def id(self):
-        return self._parsed['id']
-
-    def name(self):
+    def get_name(self):
         return self._parsed['name']
 
-    def path(self):
+    def get_path(self):
         return _path(self._parsed['path'])
 
-    def plugin_registry(self):
+    def get_plugin_registry(self):
         return self._plugin_registry
 
 
 class DirectoryPluginRegistry(PluginRegistry):
 
     LAYOUT = 'directory'
+
+    FILE_NAMING_CONVENTION_ABBREVIATED = 'abbreviated'
+
+    FILE_NAMING_CONVENTION_IDENTIFIER = 'identifier'
+
+    FILE_NAMING_CONVENTION_UNDERSCORE = 'underscore'
+
+    DEFAULT_FILE_NAMING_CONVENTION = FILE_NAMING_CONVENTION_IDENTIFIER
 
     def __init__(self, parsed):
         super().__init__(parsed)
@@ -174,28 +182,37 @@ class DirectoryPluginRegistryLayer(PluginRegistryLayer):
         jar_path = self._get_dstpath(plugin_id)
         return jar_path if jar_path.is_file() else None
 
+    def get_file_naming_convention(self):
+        return self.get_plugin_registry()._parsed['layout'].get('file-naming-convention', DirectoryPluginRegistry.DEFAULT_FILE_NAMING_CONVENTION)
+
     def get_jars(self):
-        return sorted(self.path().glob('*.jar'))
+        return sorted(self.get_path().glob('*.jar'))
 
     def _copy_jar(self, src_path, dst_path, interactive=False):
         basename = dst_path.name
-        subprocess.run(['cp', str(src_path), str(dst_path)], check=True, cwd=self.path())
-        if subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null',
-                          shell=True).returncode == 0:
+        subprocess.run(['cp', str(src_path), str(dst_path)], check=True, cwd=self.get_path())
+        if subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null', shell=True).returncode == 0:
             cmd = ['chcon', '-t', 'httpd_sys_content_t', basename]
-            subprocess.run(cmd, check=True, cwd=self.path())
+            subprocess.run(cmd, check=True, cwd=self.get_path())
 
     def _get_dstpath(self, plugin_id):
-        return Path(self.path(), self._get_dstfile(plugin_id))
+        return Path(self.get_path(), self._get_dstfile(plugin_id))
 
     def _get_dstfile(self, plugin_id):
-        return f'{plugin_id}.jar'
+        conv = self.get_file_naming_convention()
+        if conv == DirectoryPluginRegistry.FILE_NAMING_CONVENTION_IDENTIFIER:
+            return f'{plugin_id}.jar'
+        elif conv == DirectoryPluginRegistry.FILE_NAMING_CONVENTION_UNDERSCORE:
+            return f'{plugin_id.replace(".", "_")}.jar'
+        elif conv == DirectoryPluginRegistry.FILE_NAMING_CONVENTION_ABBREVIATED:
+            return f'{plugin_id.split(".")[-1]}.jar'
+        else:
+            raise RuntimeError(f'{self.get_plugin_registry().get_id()}: unknown file naming convention: {conv}')
 
     def _proceed_copy(self, src_path, dst_path, interactive=False):
         if not dst_path.exists():
             if interactive:
-                i = input(
-                    f'{dst_path} does not exist in {self.plugin_registry().id()}:{self.id()} ({self.name()}); create it (y/n)? [n] ').lower() or 'n'
+                i = input(f'{dst_path} does not exist in {self.get_plugin_registry().get_id()}:{self.get_id()} ({self.get_name()}); create it (y/n)? [n] ').lower() or 'n'
                 if i != 'y':
                     return False
         return True
@@ -204,10 +221,6 @@ class DirectoryPluginRegistryLayer(PluginRegistryLayer):
 class RcsPluginRegistry(DirectoryPluginRegistry):
 
     LAYOUT = 'rcs'
-
-    IDENTIFIER = 'identifier'
-
-    ABBREVIATED = 'abbreviated'
 
     def __init__(self, parsed):
         super().__init__(parsed)
@@ -221,31 +234,19 @@ class RcsPluginRegistryLayer(DirectoryPluginRegistryLayer):
     def __init__(self, plugin_registry, parsed):
         super().__init__(plugin_registry, parsed)
 
-    def get_file_naming_convention(self):
-        return self.plugin_registry()._parsed['layout'].get('file-naming-convention', RcsPluginRegistry.IDENTIFIER)
-
     def _copy_jar(self, src_path, dst_path, interactive=False):
-        basename = dst_path.name
+        basename = dst_path.get_name
         plugin = Plugin.from_jar(src_path)
-        rcs_path = self.path().joinpath('RCS', f'{basename},v')
+        rcs_path = self.get_path().joinpath('RCS', f'{basename},v')
         # Maybe do co -l before the parent's copy
         if dst_path.exists() and rcs_path.is_file():
             cmd = ['co', '-l', basename]
-            subprocess.run(cmd, check=True, cwd=self.path())
+            subprocess.run(cmd, check=True, cwd=self.get_path())
         # Do the parent's copy
         super()._copy_jar(src_path, dst_path)
-        # Do ci -u after the aprent's copy
-        cmd = ['ci', '-u', f'-mVersion {plugin.version()}']
+        # Do ci -u after the parent's copy
+        cmd = ['ci', '-u', f'-mVersion {plugin.get_version()}']
         if not rcs_path.is_file():
-            cmd.append(f'-t-{plugin.name()}')
+            cmd.append(f'-t-{plugin.get_name()}')
         cmd.append(basename)
-        subprocess.run(cmd, check=True, cwd=self.path())
-
-    def _get_dstfile(self, plugid):
-        conv = self.get_file_naming_convention()
-        if conv == RcsPluginRegistry.IDENTIFIER:
-            return super()._get_dstfile(plugid)
-        elif conv == RcsPluginRegistry.ABBREVIATED:
-            return f'{plugid.split(".")[-1]}.jar'
-        else:
-            raise RuntimeError(f'{self.plugin_registry().id()}: unknown file naming convention: {conv}')
+        subprocess.run(cmd, check=True, cwd=self.get_path())

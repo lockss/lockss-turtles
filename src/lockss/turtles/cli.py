@@ -138,7 +138,7 @@ class TurtlesCli(object):
         # ... plugin_id -> (set_id, jar_path, plugin)
         ret = self._app.build_plugin(self._get_identifiers())
         # Output
-        print(tabulate.tabulate([[plugin_id, plugin.version(), set_id, jar_path] for plugin_id, (set_id, jar_path, plugin) in ret.items()],
+        print(tabulate.tabulate([[plugin_id, plugin.get_version(), set_id, jar_path] for plugin_id, (set_id, jar_path, plugin) in ret.items()],
                                 headers=['Plugin identifier', 'Plugin version', 'Plugin set', 'Plugin JAR'],
                                 tablefmt=self._args.output_format))
 
@@ -154,7 +154,7 @@ class TurtlesCli(object):
                                       self._get_layers(),
                                       interactive=self._args.interactive)
         # Output
-        print(tabulate.tabulate([[src_path, plugin_id, plugin.version(), registry_id, layer_id, dst_path] for (src_path, plugin_id), val in ret.items() for registry_id, layer_id, dst_path, plugin in val],
+        print(tabulate.tabulate([[src_path, plugin_id, plugin.get_version(), registry_id, layer_id, dst_path] for (src_path, plugin_id), val in ret.items() for registry_id, layer_id, dst_path, plugin in val],
                                 headers=['Plugin JAR', 'Plugin identifier', 'Plugin version', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
                                 tablefmt=self._args.output_format))
 
@@ -162,7 +162,7 @@ class TurtlesCli(object):
         if self._identifiers is None:
             self._identifiers = list()
             self._identifiers.extend(self._args.remainder)
-            self._identifiers.extend(self._args.identifier)
+            self._identifiers.extend(self._args.get_identifier)
             for path in self._args.identifiers:
                 self._identifiers.extend(_file_lines(path))
             if len(self._identifiers) == 0:
@@ -249,49 +249,52 @@ class TurtlesCli(object):
                                help="synonym for --layer=%(const)s (i.e. add '%(const)s' to the list of plugin registry layers to process)")
 
     def _make_options_identifiers(self, container):
-        container.add_argument('--identifier', '-i',
-                               metavar='PLUGID',
-                               action='append',
-                               default=list(),
-                               help='add %(metavar)s to the list of plugin identifiers to build')
-        container.add_argument('--identifiers', '-I',
-                               metavar='FILE',
-                               action='append',
-                               default=list(),
-                               help='add the plugin identifiers in %(metavar)s to the list of plugin identifiers to build')
-        container.add_argument('remainder',
-                               metavar='PLUGID',
-                               nargs='*',
-                               help='plugin identifier to build')
+        group = container.add_argument_group(title='plugin identifier arguments and options')
+        group.add_argument('--identifier', '-i',
+                           metavar='PLUGID',
+                           action='append',
+                           default=list(),
+                           help='add %(metavar)s to the list of plugin identifiers to build')
+        group.add_argument('--identifiers', '-I',
+                           metavar='FILE',
+                           action='append',
+                           default=list(),
+                           help='add the plugin identifiers in %(metavar)s to the list of plugin identifiers to build')
+        group.add_argument('remainder',
+                            metavar='PLUGID',
+                            nargs='*',
+                            help='plugin identifier to build')
 
     def _make_options_jars(self, container):
-        container.add_argument('--jar', '-j',
-                               metavar='PLUGJAR',
-                               type=Path,
-                               action='append',
-                               default=list(),
-                               help='add %(metavar)s to the list of plugin JARs to deploy')
-        container.add_argument('--jars', '-J',
-                               metavar='FILE',
-                               action='append',
-                               default=list(),
-                               help='add the plugin JARs in %(metavar)s to the list of plugin JARs to deploy')
-        container.add_argument('remainder',
-                               metavar='PLUGJAR',
-                               nargs='*',
-                               help='plugin JAR to deploy')
+        group = container.add_argument_group(title='plugin JAR arguments and options')
+        group.add_argument('--jar', '-j',
+                           metavar='PLUGJAR',
+                           type=Path,
+                           action='append',
+                           default=list(),
+                           help='add %(metavar)s to the list of plugin JARs to deploy')
+        group.add_argument('--jars', '-J',
+                           metavar='FILE',
+                           action='append',
+                           default=list(),
+                           help='add the plugin JARs in %(metavar)s to the list of plugin JARs to deploy')
+        group.add_argument('remainder',
+                           metavar='PLUGJAR',
+                           nargs='*',
+                           help='plugin JAR to deploy')
 
     def _make_options_layers(self, container):
-        container.add_argument('--layer', '-l',
-                               metavar='LAYER',
-                               action='append',
-                               default=list(),
-                               help='add %(metavar)s to the list of plugin registry layers to process')
-        container.add_argument('--layers', '-L',
-                               metavar='FILE',
-                               action='append',
-                               default=list(),
-                               help='add the layers in %(metavar)s to the list of plugin registry layers to process')
+        group = container.add_argument_group(title='plugin registry layer options')
+        group.add_argument('--layer', '-l',
+                           metavar='LAYER',
+                           action='append',
+                           default=list(),
+                           help='add %(metavar)s to the list of plugin registry layers to process')
+        group.add_argument('--layers', '-L',
+                           metavar='FILE',
+                           action='append',
+                           default=list(),
+                           help='add the layers in %(metavar)s to the list of plugin registry layers to process')
 
     def _make_parser(self):
         self._parser = argparse.ArgumentParser(prog=TurtlesCli.PROG)
@@ -303,7 +306,6 @@ class TurtlesCli(object):
                                                        help='DESCRIPTION')
         self._make_option_debug_cli(self._parser)
         self._make_option_non_interactive(self._parser)
-        self._make_option_output_format(self._parser)
         #self._make_parser_analyze_registry(self._subparsers)
         self._make_parser_build_plugin(self._subparsers)
         self._make_parser_copyright(self._subparsers)
@@ -327,10 +329,11 @@ class TurtlesCli(object):
                                       description='Build (package and sign) plugins',
                                       help='build (package and sign) plugins')
         parser.set_defaults(fun=self._build_plugin)
-        self._make_options_identifiers(parser)
+        self._make_option_output_format(parser)
         self._make_option_password(parser)
         self._make_option_plugin_set_catalog(parser)
         self._make_option_plugin_signing_credentials(parser)
+        self._make_options_identifiers(parser)
 
     def _make_parser_copyright(self, container):
         parser = container.add_parser('copyright',
@@ -343,11 +346,12 @@ class TurtlesCli(object):
                                       description='Deploy plugins',
                                       help='deploy plugins')
         parser.set_defaults(fun=self._deploy_plugin)
-        self._make_options_jars(parser)
-        self._make_options_layers(parser)
+        self._make_option_output_format(parser)
         self._make_option_plugin_registry_catalog(parser)
         self._make_option_production(parser)
         self._make_option_testing(parser)
+        self._make_options_jars(parser)
+        self._make_options_layers(parser)
 
     def _make_parser_license(self, container):
         parser = container.add_parser('license',
@@ -360,14 +364,15 @@ class TurtlesCli(object):
                                       description='Release (build and deploy) plugins',
                                       help='release (build and deploy) plugins')
         parser.set_defaults(fun=self._release_plugin)
-        self._make_options_identifiers(parser)
-        self._make_options_layers(parser)
+        self._make_option_output_format(parser)
         self._make_option_password(parser)
         self._make_option_plugin_registry_catalog(parser)
         self._make_option_plugin_set_catalog(parser)
         self._make_option_plugin_signing_credentials(parser)
         self._make_option_production(parser)
         self._make_option_testing(parser)
+        self._make_options_identifiers(parser)
+        self._make_options_layers(parser)
 
     def _make_parser_usage(self, container):
         parser = container.add_parser('usage',
@@ -402,7 +407,7 @@ class TurtlesCli(object):
                                        self._get_layers(),
                                        interactive=self._args.interactive)
         # Output
-        print(tabulate.tabulate([[plugin_id, plugin.version(), registry_id, layer_id, dst_path] for plugin_id, val in ret.items() for registry_id, layer_id, dst_path, plugin in val],
+        print(tabulate.tabulate([[plugin_id, plugin.get_version(), registry_id, layer_id, dst_path] for plugin_id, val in ret.items() for registry_id, layer_id, dst_path, plugin in val],
                                 headers=['Plugin identifier', 'Plugin version', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
                                 tablefmt=self._args.output_format))
 
