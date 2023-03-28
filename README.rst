@@ -83,7 +83,7 @@ Table of Contents
 
    * `Commands`_
 
-      *  Top-Level Program
+      *  `Top-Level Program`_
 
       *  `build-plugin`_
 
@@ -632,7 +632,7 @@ The ``build-plugin`` command is used for `Building Plugins`_. It has its own |HE
 
 The command needs:
 
-*  `Plugin Signing Credentials`_, either from the |PLUGIN_SIGNING_CREDENTIALS| option or from ``plugin-signing-credentials.yaml` in the `Configuration Files`_.
+*  `Plugin Signing Credentials`_, either from the |PLUGIN_SIGNING_CREDENTIALS| option or from ``plugin-signing-credentials.yaml`` in the `Configuration Files`_.
 
 *  A `Plugin Set Catalog`_, either from the |PLUGIN_SET_CATALOG| option or from ``plugin-set-catalog.yaml`` in the `Configuration Files`_.
 
@@ -842,7 +842,7 @@ The ``release-plugin`` command is used for `Building Plugins`_ and `Deploying Pl
 
 The command needs:
 
-*  `Plugin Signing Credentials`_, either from the |PLUGIN_SIGNING_CREDENTIALS| option or from ``plugin-signing-credentials.yaml` in the `Configuration Files`_.
+*  `Plugin Signing Credentials`_, either from the |PLUGIN_SIGNING_CREDENTIALS| option or from ``plugin-signing-credentials.yaml`` in the `Configuration Files`_.
 
 *  A `Plugin Set Catalog`_, either from the |PLUGIN_SET_CATALOG| option or from ``plugin-set-catalog.yaml`` in the `Configuration Files`_.
 
