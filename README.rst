@@ -262,7 +262,16 @@ Maven Plugin Set Builder Prerequisites
 Maven Plugin Set Builder Declaration
 ++++++++++++++++++++++++++++++++++++
 
-For this plugin set builder type, the ``builder`` object in the plugin set definition has the following structure:
+For this plugin set builder type, the ``builder`` object in the plugin set definition has the following structure::
+
+    ---
+    kind: PluginSet
+    id: ...
+    name: ...
+    builder:
+      type: mvn
+      main: ...
+      test: ...
 
 ``type``
    *Required.* Must be set to ``mvn``.
@@ -290,7 +299,16 @@ Ant Plugin Set Builder Prerequisites
 Ant Plugin Set Builder Declaration
 ++++++++++++++++++++++++++++++++++
 
-For this plugin set builder type, the ``builder`` object in the plugin set definition has the following structure:
+For this plugin set builder type, the ``builder`` object in the plugin set definition has the following structure::
+
+    ---
+    kind: PluginSet
+    id: ...
+    name: ...
+    builder:
+      type: ant
+      main: ...
+      test: ...
 
 ``type``
    *Required.* Must be set to ``ant``.
@@ -340,12 +358,6 @@ A plugin registry is defined by a YAML document::
       type: ...
       ...
     layers:
-      - id: testing
-        name: My Plugin Registry (Testing)
-        path: /path/to/testing
-      - id: production
-        name: My Plugin Registry (Production)
-        path: /path/to/production
       - ...
     plugin-identifiers:
       - edu.myuniversity.plugin.publisherx.PublisherXPlugin
@@ -381,7 +393,7 @@ The contents are described below:
 ``plugin-identifiers``
    *Required.* Non-empty list of the plugin identifiers in this plugin registry.
 
-``plugin-identifiers``
+``suppressed-plugin-identifiers``
    *Optional.* Non-empty list of plugin identifiers that are excluded from this plugin registry.
 
    Turtles does not currently do anything with this information, but it can be used to record plugins that have been abandoned or retracted over the lifetime of the plugin registry.
@@ -408,12 +420,33 @@ None.
 Directory Plugin Registry Layout Declaration
 ++++++++++++++++++++++++++++++++++++++++++++
 
-For this plugin registry layout type, the ``layout`` object in the plugin registry definition has the following structure:
+For this plugin registry layout type, the ``layout`` object in the plugin registry definition has the following structure::
+
+    ---
+    kind: PluginRegistry
+    id: ...
+    name: ...
+    layout:
+      type: directory
+      file-naming-convention: ...
+    layers:
+      - ...
+    plugin-identifiers:
+      - ...
+    suppressed-plugin-identifiers:
+      - ...
 
 ``type``
    *Required.* Must be set to ``directory``.
 
-Currently, this layout type does not support the ``file-naming-convention`` option of the `RCS Plugin Registry Layout`_, but this feature will be introduced in a future release.
+``file-naming-convention``
+   *Optional.* A rule for what to name each deployed JAR file. If unspecified, the behavior is that of ``identifier``. Can be one of:
+
+   *  ``identifier``: Use the plugin identifier and add ``.jar``. For example ``edu.myuniversity.plugin.publisherx.PublisherXPlugin`` results in ``edu.myuniversity.plugin.publisherx.PublisherXPlugin.jar``.
+
+   *  ``underscore``: Replace ``.`` in the plugin identifier with ``_``, and add ``.jar``. For example ``edu.myuniversity.plugin.publisherx.PublisherXPlugin`` results in ``edu_myuniversity_plugin_publisherx_PublisherXPlugin.jar``.
+
+   *  ``abbreviated``: Use the last dotted component of the plugin identifier and add ``.jar``. For example ``edu.myuniversity.plugin.publisherx.PublisherXPlugin`` results in ``PublisherXPlugin.jar``.
 
 RCS Plugin Registry Layout
 --------------------------
@@ -428,7 +461,21 @@ RCS Plugin Registry Layout Prerequisites
 RCS Plugin Registry Layout Declaration
 ++++++++++++++++++++++++++++++++++++++
 
-For this plugin registry layout type, the ``layout`` object in the plugin registry definition has the following structure:
+For this plugin registry layout type, the ``layout`` object in the plugin registry definition has the following structure::
+
+    ---
+    kind: PluginRegistry
+    id: ...
+    name: ...
+    layout:
+      type: rcs
+      file-naming-convention: ...
+    layers:
+      - ...
+    plugin-identifiers:
+      - ...
+    suppressed-plugin-identifiers:
+      - ...
 
 ``type``
    *Required.* Must be set to ``rcs``.
@@ -438,7 +485,9 @@ For this plugin registry layout type, the ``layout`` object in the plugin regist
 
    *  ``identifier``: Use the plugin identifier and add ``.jar``. For example ``edu.myuniversity.plugin.publisherx.PublisherXPlugin`` results in ``edu.myuniversity.plugin.publisherx.PublisherXPlugin.jar``.
 
-   *  ``abbreviated``: Use the last component of the plugin identifier and add ``.jar``. For example ``edu.myuniversity.plugin.publisherx.PublisherXPlugin`` results in ``PublisherXPlugin.jar``.
+   *  ``underscore``: Replace ``.`` in the plugin identifier with ``_``, and add ``.jar``. For example ``edu.myuniversity.plugin.publisherx.PublisherXPlugin`` results in ``edu_myuniversity_plugin_publisherx_PublisherXPlugin.jar``.
+
+   *  ``abbreviated``: Use the last dotted component of the plugin identifier and add ``.jar``. For example ``edu.myuniversity.plugin.publisherx.PublisherXPlugin`` results in ``PublisherXPlugin.jar``.
 
 Plugin Registry Layers
 ======================
@@ -453,7 +502,27 @@ Although the identifiers (see ``id`` below) and display names (see ``name`` belo
 
 It is possible for multiple plugin registries to have a layer ``path`` in common. An example would be a team working on several plugin registries for different purposes, having distinct (public) production layer paths, but sharing a single (internal) testing layer path, if they are the only audience for it.
 
-A plugin registry layer is defined as one of the objects in the plugin registry definition's ``layers`` list. Each layer object has the following structure:
+A plugin registry layer is defined as one of the objects in the plugin registry definition's ``layers`` list. Each layer object has the following structure::
+
+    ---
+    kind: PluginRegistry
+    id: ...
+    name: ...
+    layout:
+      type: ...
+      ...
+    layers:
+      - id: testing
+        name: My Plugin Registry (Testing)
+        path: /path/to/testing
+      - id: production
+        name: My Plugin Registry (Production)
+        path: /path/to/production
+      - ...
+    plugin-identifiers:
+      - ...
+    suppressed-plugin-identifiers:
+      - ...
 
 ``id``
    *Required.* A short identifier for the plugin registry layer, for example ``testing``.
