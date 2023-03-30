@@ -637,7 +637,7 @@ The top-level executable alone does not perform any action or default to a given
                             disallow interactive prompts (default: allow)
 
     commands:
-      Add --help to see the command's own help message
+      Add --help to see the command's own help message.
 
       COMMAND               DESCRIPTION
         build-plugin (bp)   build (package and sign) plugins
@@ -662,7 +662,7 @@ The ``build-plugin`` command is used for `Building Plugins`_. It has its own |HE
                                 [--identifier PLUGID] [--identifiers FILE]
                                 [PLUGID ...]
 
-    Build (package and sign) plugins
+    Build (package and sign) plugins.
 
     options:
       -h, --help            show this help message and exit
@@ -707,6 +707,8 @@ The command needs:
 
 *  One or more plugin identifiers, from the `Plugin Identifier Arguments and Options`_ (bare arguments, |IDENTIFIER| options, |IDENTIFIERS| options).
 
+It also accepts `Options`_ for `Output Format Control`_
+
 Examples::
 
     # Help message
@@ -750,7 +752,7 @@ The ``deploy-plugin`` command is used for `Deploying Plugins`_. It has its own |
                                  [--layer LAYER] [--layers FILE]
                                  [PLUGJAR ...]
 
-    Deploy plugins
+    Deploy plugins.
 
     options:
       -h, --help            show this help message and exit
@@ -804,6 +806,8 @@ The command needs:
 
    *  The JAR paths found in the files listed as |JARS| options.
 
+It also accepts `Options`_ for `Output Format Control`_.
+
 Examples::
 
     # Help message
@@ -853,7 +857,7 @@ The ``release-plugin`` command is used for `Building Plugins`_ and `Deploying Pl
                                   [--layers FILE]
                                   [PLUGID ...]
 
-    Release (build and deploy) plugins
+    Release (build and deploy) plugins.
 
     options:
       -h, --help            show this help message and exit
@@ -920,6 +924,8 @@ The command needs:
 *  One or more plugin registry layer IDs, from the `Plugin Registry Layer Options`_ (|IDENTIFIER| options, |IDENTIFIERS| options, and alternatively, |TESTING| options, |PRODUCTION| option).
 
 *  One or more plugin identifiers, from the `Plugin Identifier Arguments and Options`_ (bare arguments, |IDENTIFIER| options, |IDENTIFIERS| options).
+
+It also accepts `Options`_ for `Output Format Control`_.
 
 Examples::
 

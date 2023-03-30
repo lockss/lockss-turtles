@@ -299,7 +299,7 @@ class TurtlesCli(object):
     def _make_parser(self):
         self._parser = argparse.ArgumentParser(prog=TurtlesCli.PROG)
         self._subparsers = self._parser.add_subparsers(title='commands',
-                                                       description="Add --help to see the command's own help message",
+                                                       description="Add --help to see the command's own help message.",
                                                        # With subparsers, metavar is also used as the heading of the column of subcommands
                                                        metavar='COMMAND',
                                                        # With subparsers, help is used as the heading of the column of subcommand descriptions
@@ -326,7 +326,7 @@ class TurtlesCli(object):
 
     def _make_parser_build_plugin(self, container):
         parser = container.add_parser('build-plugin', aliases=['bp'],
-                                      description='Build (package and sign) plugins',
+                                      description='Build (package and sign) plugins.',
                                       help='build (package and sign) plugins')
         parser.set_defaults(fun=self._build_plugin)
         self._make_option_output_format(parser)
@@ -337,13 +337,13 @@ class TurtlesCli(object):
 
     def _make_parser_copyright(self, container):
         parser = container.add_parser('copyright',
-                                      description='Show copyright and exit',
+                                      description='Show copyright and exit.',
                                       help='show copyright and exit')
         parser.set_defaults(fun=self._copyright)
 
     def _make_parser_deploy_plugin(self, container):
         parser = container.add_parser('deploy-plugin', aliases=['dp'],
-                                      description='Deploy plugins',
+                                      description='Deploy plugins.',
                                       help='deploy plugins')
         parser.set_defaults(fun=self._deploy_plugin)
         self._make_option_output_format(parser)
@@ -355,13 +355,13 @@ class TurtlesCli(object):
 
     def _make_parser_license(self, container):
         parser = container.add_parser('license',
-                                      description='Show license and exit',
+                                      description='Show license and exit.',
                                       help='show license and exit')
         parser.set_defaults(fun=self._license)
 
     def _make_parser_release_plugin(self, container):
         parser = container.add_parser('release-plugin', aliases=['rp'],
-                                      description='Release (build and deploy) plugins',
+                                      description='Release (build and deploy) plugins.',
                                       help='release (build and deploy) plugins')
         parser.set_defaults(fun=self._release_plugin)
         self._make_option_output_format(parser)
@@ -376,13 +376,13 @@ class TurtlesCli(object):
 
     def _make_parser_usage(self, container):
         parser = container.add_parser('usage',
-                                      description='Show detailed usage and exit',
+                                      description='Show detailed usage and exit.',
                                       help='show detailed usage and exit')
         parser.set_defaults(fun=self._usage)
 
     def _make_parser_version(self, container):
         parser = container.add_parser('version',
-                                      description='Show version and exit',
+                                      description='Show version and exit.',
                                       help='show version and exit')
         parser.set_defaults(fun=self._version)
 
