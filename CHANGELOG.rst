@@ -14,6 +14,8 @@ Released: ?
 
    *  New ``directory``/``rcs`` file naming convention ``underscore``: replace ``.`` in the plugin identifier by ``_`` and add ``.jar``.
 
+   *  CLI improvements.
+
 *  **Changes**
 
    *  The ``--output-format`` option is now only available in the context of commands where it makes sense.
