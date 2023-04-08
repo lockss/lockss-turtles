@@ -2,6 +2,9 @@
 Turtles
 =======
 
+.. |RELEASE| replace:: 0.4.0-dev1
+.. |RELEASE_DATE| replace:: ?
+
 .. |HELP| replace:: ``--help/-h``
 .. |IDENTIFIER| replace:: ``--identifier/-i``
 .. |IDENTIFIERS| replace:: ``--identifiers/-I``
@@ -17,7 +20,7 @@ Turtles
 
 Turtles is a tool to manage LOCKSS plugin sets and LOCKSS plugin registries.
 
-**Latest release:** 0.4.0-dev1 (?)
+**Latest release:** |RELEASE| (|RELEASE_DATE|)
 
 -----------------
 Table of Contents
