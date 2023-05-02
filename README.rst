@@ -2,7 +2,7 @@
 Turtles
 =======
 
-.. |RELEASE| replace:: 0.4.0-dev1
+.. |RELEASE| replace:: 0.4.0-dev2
 .. |RELEASE_DATE| replace:: ?
 
 .. |HELP| replace:: ``--help/-h``
