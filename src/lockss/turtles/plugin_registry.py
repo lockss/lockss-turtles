@@ -235,7 +235,7 @@ class RcsPluginRegistryLayer(DirectoryPluginRegistryLayer):
         super().__init__(plugin_registry, parsed)
 
     def _copy_jar(self, src_path, dst_path, interactive=False):
-        basename = dst_path.get_name
+        basename = dst_path.name
         plugin = Plugin.from_jar(src_path)
         rcs_path = self.get_path().joinpath('RCS', f'{basename},v')
         # Maybe do co -l before the parent's copy

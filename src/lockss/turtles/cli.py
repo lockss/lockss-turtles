@@ -164,7 +164,7 @@ class TurtlesCli(object):
         if self._identifiers is None:
             self._identifiers = list()
             self._identifiers.extend(self._args.remainder)
-            self._identifiers.extend(self._args.get_identifier)
+            self._identifiers.extend(self._args.identifier)
             for path in self._args.identifiers:
                 self._identifiers.extend(_file_lines(path))
             if len(self._identifiers) == 0:
