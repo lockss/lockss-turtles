@@ -107,14 +107,14 @@ class TurtlesApp(object):
         if self._plugin_registries is None:
             plugin_registry_catalog = PluginRegistryCatalog.from_path(self.select_plugin_registry_catalog(plugin_registry_catalog_path))
             self._plugin_registries = list()
-            for plugin_registry_file in plugin_registry_catalog.plugin_registry_files():
+            for plugin_registry_file in plugin_registry_catalog.get_plugin_registry_files():
                 self._plugin_registries.extend(PluginRegistry.from_path(plugin_registry_file))
 
     def load_plugin_sets(self, plugin_set_catalog_path=None):
         if self._plugin_sets is None:
             plugin_set_catalog = PluginSetCatalog.from_path(self.select_plugin_set_catalog(plugin_set_catalog_path))
             self._plugin_sets = list()
-            for plugin_set_file in plugin_set_catalog.plugin_set_files():
+            for plugin_set_file in plugin_set_catalog.get_plugin_set_files():
                 self._plugin_sets.extend(PluginSet.from_path(plugin_set_file))
 
     def load_plugin_signing_credentials(self, plugin_signing_credentials_path=None):
@@ -150,7 +150,7 @@ class TurtlesApp(object):
     def _build_one_plugin(self, plugin_id):
         for plugin_set in self._plugin_sets:
             if plugin_set.has_plugin(plugin_id):
-                return (plugin_set.id(),
+                return (plugin_set.get_id(),
                         *plugin_set.build_plugin(plugin_id,
                                                  self._get_plugin_signing_keystore(),
                                                  self._get_plugin_signing_alias(),
@@ -165,8 +165,8 @@ class TurtlesApp(object):
                 for layer_id in layer_ids:
                     layer = plugin_registry.get_layer(layer_id)
                     if layer is not None:
-                        ret.append((plugin_registry.id(),
-                                    layer.id(),
+                        ret.append((plugin_registry.get_id(),
+                                    layer.get_id(),
                                     *layer.deploy_plugin(plugin_id,
                                                          src_jar,
                                                          interactive=interactive)))

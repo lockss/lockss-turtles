@@ -46,7 +46,10 @@
           "if": {
             "properties": {
               "type": {
-                "const": "rcs"
+                "enum": [
+                  "directory",
+                  "rcs"
+                ]
               }
             }
           },
@@ -55,9 +58,11 @@
               "file-naming-convention": {
                 "description": "The plugin registry file naming convention",
                 "enum": [
+                  "abbreviated",
                   "identifier",
-                  "abbreviated"
-                ]
+                  "underscore"
+                ],
+                "default": "identifier"
               }
             }
           }

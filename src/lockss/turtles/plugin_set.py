@@ -55,7 +55,7 @@ class PluginSetCatalog(object):
         super().__init__()
         self._parsed = parsed
 
-    def plugin_set_files(self):
+    def get_plugin_set_files(self):
         return self._parsed['plugin-set-files']
 
 
@@ -88,20 +88,20 @@ class PluginSet(object):
     def build_plugin(self, plugin_id, keystore_path, keystore_alias, keystore_password=None):
         raise NotImplementedError('build_plugin')
 
-    def builder_type(self):
+    def get_builder_type(self):
         return self._parsed['builder']['type']
+
+    def get_id(self):
+        return self._parsed['id']
+
+    def get_name(self):
+        return self._parsed['name']
 
     def has_plugin(self, plugin_id):
         raise NotImplementedError('has_plugin')
 
-    def id(self):
-        return self._parsed['id']
-
     def make_plugin(self, plugin_id):
         raise NotImplementedError('make_plugin')
-
-    def name(self):
-        return self._parsed['name']
 
 
 class AntPluginSet(PluginSet):
@@ -127,35 +127,35 @@ class AntPluginSet(PluginSet):
         # Little build
         return self._little_build(plugin_id, keystore_path, keystore_alias, keystore_password=keystore_password)
 
+    def get_main(self):
+        return self._parsed.get('main', AntPluginSet.DEFAULT_MAIN)
+
+    def get_main_path(self):
+        return self.get_root_path().joinpath(self.get_main())
+
+    def get_root(self):
+        return self._root
+
+    def get_root_path(self):
+        return Path(self.get_root()).expanduser().resolve()
+
+    def get_test(self):
+        return self._parsed.get('test', AntPluginSet.DEFAULT_TEST)
+
+    def get_test_path(self):
+        return self.get_root_path().joinpath(self.get_test())
+
     def has_plugin(self, plugin_id):
         return self._plugin_path(plugin_id).is_file()
 
-    def main(self):
-        return self._parsed.get('main', AntPluginSet.DEFAULT_MAIN)
-
-    def main_path(self):
-        return self.root_path().joinpath(self.main())
-
     def make_plugin(self, plugin_id):
         return Plugin.from_path(self._plugin_path(plugin_id))
-
-    def root(self):
-        return self._root
-
-    def root_path(self):
-        return Path(self.root()).expanduser().resolve()
-
-    def test(self):
-        return self._parsed.get('test', AntPluginSet.DEFAULT_TEST)
-
-    def test_path(self):
-        return self.root_path().joinpath(self.test())
 
     def _big_build(self):
         if not self._built:
             # Do build
             subprocess.run('ant load-plugins',
-                           shell=True, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+                           shell=True, cwd=self.get_root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             self._built = True
 
     # Returns (jar_path, plugin)
@@ -168,17 +168,17 @@ class AntPluginSet(PluginSet):
             cur_dir = Plugin.id_to_dir(cur_id)
             if cur_dir not in dirs:
                 dirs.append(cur_dir)
-            cur_id = self.make_plugin(cur_id).parent_identifier()
+            cur_id = self.make_plugin(cur_id).get_parent_identifier()
         # Invoke jarplugin
         jar_fstr = Plugin.id_to_file(plugin_id)
-        jar_path = self.root_path().joinpath('plugins/jars', f'{plugin_id}.jar')
+        jar_path = self.get_root_path().joinpath('plugins/jars', f'{plugin_id}.jar')
         jar_path.parent.mkdir(parents=True, exist_ok=True)
         cmd = ['test/scripts/jarplugin',
                '-j', str(jar_path),
                '-p', str(jar_fstr)]
         for d in dirs:
             cmd.extend(['-d', d])
-        subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+        subprocess.run(cmd, cwd=self.get_root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
         # Invoke signplugin
         cmd = ['test/scripts/signplugin',
                '--jar', str(jar_path),
@@ -187,7 +187,7 @@ class AntPluginSet(PluginSet):
         if keystore_password is not None:
             cmd.extend(['--password', keystore_password])
         try:
-            subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+            subprocess.run(cmd, cwd=self.get_root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
         except subprocess.CalledProcessError as cpe:
             raise self._sanitize(cpe)
         if not jar_path.is_file():
@@ -195,7 +195,7 @@ class AntPluginSet(PluginSet):
         return (jar_path, plugin)
 
     def _plugin_path(self, plugin_id):
-        return Path(self.main_path()).joinpath(Plugin.id_to_file(plugin_id))
+        return Path(self.get_main_path()).joinpath(Plugin.id_to_file(plugin_id))
 
     def _sanitize(self, called_process_error):
         cmd = called_process_error.cmd[:]
@@ -225,29 +225,29 @@ class MavenPluginSet(PluginSet):
         self._big_build(keystore_path, keystore_alias, keystore_password=keystore_password)
         return self._little_build(plugin_id)
 
+    def get_main(self):
+        return self._parsed.get('main', MavenPluginSet.DEFAULT_MAIN)
+
+    def get_main_path(self):
+        return self.get_root_path().joinpath(self.get_main())
+
+    def get_root(self):
+        return self._root
+
+    def get_root_path(self):
+        return Path(self.get_root()).expanduser().resolve()
+
+    def get_test(self):
+        return self._parsed.get('test', MavenPluginSet.DEFAULT_TEST)
+
+    def get_test_path(self):
+        return self.get_root_path().joinpath(self.get_test())
+
     def has_plugin(self, plugin_id):
         return self._plugin_path(plugin_id).is_file()
 
-    def main(self):
-        return self._parsed.get('main', MavenPluginSet.DEFAULT_MAIN)
-
-    def main_path(self):
-        return self.root_path().joinpath(self.main())
-
     def make_plugin(self, plugin_id):
         return Plugin.from_path(self._plugin_path(plugin_id))
-
-    def root(self):
-        return self._root
-
-    def root_path(self):
-        return Path(self.root()).expanduser().resolve()
-
-    def test(self):
-        return self._parsed.get('test', MavenPluginSet.DEFAULT_TEST)
-
-    def test_path(self):
-        return self.root_path().joinpath(self.test())
 
     def _big_build(self, keystore_path, keystore_alias, keystore_password=None):
         if not self._built:
@@ -257,20 +257,20 @@ class MavenPluginSet(PluginSet):
                    f'-Dkeystore.alias={keystore_alias}',
                    f'-Dkeystore.password={keystore_password}']
             try:
-                subprocess.run(cmd, cwd=self.root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+                subprocess.run(cmd, cwd=self.get_root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             except subprocess.CalledProcessError as cpe:
                 raise self._sanitize(cpe)
             self._built = True
 
     # Returns (jar_path, plugin)
     def _little_build(self, plugin_id):
-        jar_path = Path(self.root_path(), 'target', 'pluginjars', f'{plugin_id}.jar')
+        jar_path = Path(self.get_root_path(), 'target', 'pluginjars', f'{plugin_id}.jar')
         if not jar_path.is_file():
             raise Exception(f'{plugin_id}: built JAR not found: {jar_path!s}')
         return (jar_path, Plugin.from_jar(jar_path))
 
     def _plugin_path(self, plugin_id):
-        return Path(self.main_path()).joinpath(Plugin.id_to_file(plugin_id))
+        return Path(self.get_main_path()).joinpath(Plugin.id_to_file(plugin_id))
 
     def _sanitize(self, called_process_error):
         cmd = called_process_error.cmd[:]

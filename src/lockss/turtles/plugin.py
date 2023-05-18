@@ -29,7 +29,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from pathlib import Path
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree
 import zipfile
 
 import java_manifest
@@ -82,24 +82,24 @@ class Plugin(object):
     def __init__(self, plugin_file, plugin_path):
         super().__init__()
         self._path = plugin_path
-        self._parsed = ET.parse(plugin_file).getroot()
+        self._parsed = xml.etree.ElementTree.parse(plugin_file).getroot()
         tag = self._parsed.tag
         if tag != 'map':
             raise RuntimeError(f'{plugin_path!s}: invalid root element: {tag}')
 
-    def name(self):
-        return self._only_one('plugin_name')
-
-    def identifier(self):
+    def get_identifier(self):
         return self._only_one('plugin_identifier')
 
-    def parent_identifier(self):
+    def get_name(self):
+        return self._only_one('plugin_name')
+
+    def get_parent_identifier(self):
         return self._only_one('plugin_parent')
 
-    def parent_version(self):
+    def get_parent_version(self):
         return self._only_one('plugin_parent_version', int)
 
-    def version(self):
+    def get_version(self):
         return self._only_one('plugin_version', int)
 
     def _only_one(self, key, result=str):
