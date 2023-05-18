@@ -18,6 +18,10 @@ Turtles
 .. |PRODUCTION| replace:: ``--production/-p``
 .. |TESTING| replace:: ``--testing/-t``
 
+.. image:: https://assets.lockss.org/images/logos/turtles/turtles_128x128.png
+   :alt: Turtles logo
+   :align: right
+
 Turtles is a tool to manage LOCKSS plugin sets and LOCKSS plugin registries.
 
 **Latest release:** |RELEASE| (|RELEASE_DATE|)
