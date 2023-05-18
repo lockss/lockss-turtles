@@ -3,10 +3,18 @@ Release Notes
 =============
 
 -----
-0.4.0
+0.5.0
 -----
 
 Released: ?
+
+*  **Features**
+
+-----
+0.4.0
+-----
+
+Released: 2023-05-17
 
 *  **Features**
 
