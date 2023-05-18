@@ -2,8 +2,8 @@
 Turtles
 =======
 
-.. |RELEASE| replace:: 0.4.0-dev4
-.. |RELEASE_DATE| replace:: ?
+.. |RELEASE| replace:: 0.4.0
+.. |RELEASE_DATE| replace:: 2023-05-17
 
 .. |HELP| replace:: ``--help/-h``
 .. |IDENTIFIER| replace:: ``--identifier/-i``
