@@ -2,6 +2,16 @@
 Release Notes
 =============
 
+-----------
+0.4.0-post1
+-----------
+
+Released: 2023-05-22
+
+*  **Bugfixes**
+
+   *  Documentation fixes.
+
 -----
 0.4.0
 -----
