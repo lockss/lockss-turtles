@@ -2,8 +2,8 @@
 Turtles
 =======
 
-.. |RELEASE| replace:: 0.4.0
-.. |RELEASE_DATE| replace:: 2023-05-17
+.. |RELEASE| replace:: 0.4.0-post1
+.. |RELEASE_DATE| replace:: 2023-05-22
 
 .. |HELP| replace:: ``--help/-h``
 .. |IDENTIFIER| replace:: ``--identifier/-i``
@@ -245,8 +245,8 @@ The contents are described below:
    Other
       Additional properties depending on the plugin set builder type. See `Plugin Set Builders`_ below.
 
-Ant Plugin Set Builder
-======================
+Plugin Set Builders
+===================
 
 Turtles `Plugin Sets`_ support two types of plugin set builders:
 
@@ -407,9 +407,8 @@ The contents are described below:
 
    Turtles does not currently do anything with this information, but it can be used to record plugins that have been abandoned or retracted over the lifetime of the plugin registry.
 
------------------------
 Plugin Registry Layouts
------------------------
+=======================
 
 Turtles supports two kinds of plugin registry layouts:
 
@@ -806,7 +805,7 @@ The command needs:
 
 *  A `Plugin Registry Catalog`_, either from the |PLUGIN_REGISTRY_CATALOG| option or from ``plugin-signing-credentials.yaml`` in the `Configuration Files`_.
 
-*  One or more plugin registry layer IDs, from the `Plugin Registry Layer Options`_ (|IDENTIFIER| options, |IDENTIFIERS| options, and alternatively, |TESTING| options, |PRODUCTION| option).
+*  One or more plugin registry layer IDs, from the `Plugin Registry Layer Options`_ (|LAYER| options, |LAYERS| options, and alternatively, |TESTING| options, |PRODUCTION| option).
 
 *  One or more JAR paths. The list of JAR paths to process is derived from:
 
@@ -856,7 +855,7 @@ The ``license`` command displays the license terms for Turtles and exits.
 ``release-plugin`` (``rp``)
 ---------------------------
 
-The ``release-plugin`` command is used for `Building Plugins`_ and `Deploying Plugins`, being essentially `build-plugin`_ followed by `deploy-plugin`_. It has its own |HELP| option::
+The ``release-plugin`` command is used for `Building Plugins`_ and `Deploying Plugins`_, being essentially `build-plugin`_ followed by `deploy-plugin`_. It has its own |HELP| option::
 
     usage: turtles release-plugin [-h] [--output-format FMT] [--password PASS]
                                   [--plugin-registry-catalog FILE]
@@ -996,9 +995,9 @@ Plugin Registry Layer Options
 
 Commands that are `Deploying Plugins`_ expect one or more plugin registry layer IDs. The list of plugin registry layer IDs to target is derived from:
 
-*  The plugin registry layer IDs listed as |JAR| options.
+*  The plugin registry layer IDs listed as |LAYER| options.
 
-*  The plugin registry layer IDs found in the files listed as |JARS| options.
+*  The plugin registry layer IDs found in the files listed as |LAYERS| options.
 
 As a convenience, the following synonyms also exist:
 
