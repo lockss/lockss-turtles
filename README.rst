@@ -245,8 +245,8 @@ The contents are described below:
    Other
       Additional properties depending on the plugin set builder type. See `Plugin Set Builders`_ below.
 
-Ant Plugin Set Builder
-======================
+Plugin Set Builders
+===================
 
 Turtles `Plugin Sets`_ support two types of plugin set builders:
 
@@ -407,9 +407,8 @@ The contents are described below:
 
    Turtles does not currently do anything with this information, but it can be used to record plugins that have been abandoned or retracted over the lifetime of the plugin registry.
 
------------------------
 Plugin Registry Layouts
------------------------
+=======================
 
 Turtles supports two kinds of plugin registry layouts:
 
