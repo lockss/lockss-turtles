@@ -2,8 +2,8 @@
 Turtles
 =======
 
-.. |RELEASE| replace:: 0.4.0-post1
-.. |RELEASE_DATE| replace:: 2023-05-22
+.. |RELEASE| replace:: 0.5.0
+.. |RELEASE_DATE| replace:: 2024-09-04
 
 .. |HELP| replace:: ``--help/-h``
 .. |IDENTIFIER| replace:: ``--identifier/-i``
@@ -402,8 +402,6 @@ The contents are described below:
 
 ``suppressed-plugin-identifiers``
    *Optional.* Non-empty list of plugin identifiers that are excluded from this plugin registry.
-
-   Turtles does not currently do anything with this information, but it can be used to record plugins that have been abandoned or retracted over the lifetime of the plugin registry.
 
    Turtles does not currently do anything with this information, but it can be used to record plugins that have been abandoned or retracted over the lifetime of the plugin registry.
 

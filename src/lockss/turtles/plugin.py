@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2000-2023, Board of Trustees of Leland Stanford Jr. University
+# Copyright (c) 2000-2024, Board of Trustees of Leland Stanford Jr. University
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -86,6 +86,15 @@ class Plugin(object):
         tag = self._parsed.tag
         if tag != 'map':
             raise RuntimeError(f'{plugin_path!s}: invalid root element: {tag}')
+
+    def get_aux_packages(self):
+        key = 'plugin_aux_packages'
+        lst = [x[1] for x in self._parsed.findall('entry') if x[0].tag == 'string' and x[0].text == key]
+        if lst is None or len(lst) < 1:
+            return []
+        if len(lst) > 1:
+            raise ValueError(f'plugin declares {len(lst)} entries for {key}')
+        return [x.text for x in lst[0].findall('string')]
 
     def get_identifier(self):
         return self._only_one('plugin_identifier')

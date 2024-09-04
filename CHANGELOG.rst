@@ -2,15 +2,15 @@
 Release Notes
 =============
 
------------
-0.4.0-post1
------------
+-----
+0.5.0
+-----
 
-Released: 2023-05-22
+Released: 2024-09-04
 
-*  **Bugfixes**
+*  **Features**
 
-   *  Documentation fixes.
+   *  ``AntPluginSet``: also include plugin auxiliary packages (``plugin_aux_packages``).
 
 -----
 0.4.0
