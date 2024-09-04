@@ -6,7 +6,7 @@ Release Notes
 0.5.0
 -----
 
-Released: ?
+Released: 2024-09-04
 
 *  **Features**
 
