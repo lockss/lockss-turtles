@@ -160,15 +160,19 @@ class AntPluginSet(PluginSet):
 
     # Returns (jar_path, plugin)
     def _little_build(self, plugin_id, keystore_path, keystore_alias, keystore_password=None):
-        plugin = self.make_plugin(plugin_id)
+        cur_id = plugin_id
         # Get all directories for jarplugin -d
         dirs = list()
-        cur_id = plugin_id
         while cur_id is not None:
+            cur_plugin = self.make_plugin(cur_id)
             cur_dir = Plugin.id_to_dir(cur_id)
             if cur_dir not in dirs:
                 dirs.append(cur_dir)
-            cur_id = self.make_plugin(cur_id).get_parent_identifier()
+            for aux_package in cur_plugin.get_aux_packages():
+                aux_dir = Plugin.id_to_dir(f'{aux_package}.FAKEPlugin')
+                if aux_dir not in dirs:
+                    dirs.append(aux_dir)
+            cur_id = cur_plugin.get_parent_identifier()
         # Invoke jarplugin
         jar_fstr = Plugin.id_to_file(plugin_id)
         jar_path = self.get_root_path().joinpath('plugins/jars', f'{plugin_id}.jar')

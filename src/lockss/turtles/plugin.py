@@ -87,6 +87,13 @@ class Plugin(object):
         if tag != 'map':
             raise RuntimeError(f'{plugin_path!s}: invalid root element: {tag}')
 
+    def get_aux_packages(self):
+        def _get_aux_packages_result(r):
+            if r.tag != 'list':
+                raise ValueError(f'plugin_aux_packages expects <list>, was <{r.tag}>')
+            return [x.text for x in r.findall('string')]
+        return self._only_one('plugin_aux_packages', result=_get_aux_packages_result) or []
+
     def get_identifier(self):
         return self._only_one('plugin_identifier')
 

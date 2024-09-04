@@ -25,11 +25,11 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 java-manifest = "^1.1.0"
-jsonschema = "^4.17.3"
-pyyaml = "^6.0"
-rich-argparse = "^1.1.0"
+jsonschema = "^4.23.0"
+pyyaml = "^6.0.2"
+rich-argparse = "^1.5.2"
 tabulate = "^0.9.0"
 xdg = "^6.0.0"
 
