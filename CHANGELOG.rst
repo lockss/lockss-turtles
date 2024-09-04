@@ -10,6 +10,8 @@ Released: ?
 
 *  **Features**
 
+   *  ``AntPluginSet``: also include plugin auxiliary packages (``plugin_aux_packages``).
+
 -----
 0.4.0
 -----
