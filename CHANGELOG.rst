@@ -10,6 +10,32 @@ Released: ?
 
 *  **Features**
 
+   *  Now using type hinting throughout.
+
+   *  Now using *lockss-pybasic* and *pydantic-argparse* internally.
+
+*  **Changes**
+
+   *  The configuration directory for Turtles in ``$XDG_CONFIG_HOME`` (by default ``$HOME/.config``), ``/usr/local/share``, and ``/etc`` is now called ``lockss-turtles`` instead of ``lockss.turtles``.
+
+   *  Some long options have been renamed (the short options remain unchanged):
+
+      ============ ================= =============
+      Short option Version 0.5.0     Version 0.6.0
+      ============ ================= =============
+      ``-i``       ``--identifier``  ``--plugin-identifier``
+      ``-I``       ``--identifiers`` ``--plugin-identifiers``
+      ``-j``       ``--jar``         ``--plugin-jar``
+      ``-J``       ``--jars``        ``--plugin-jars``
+      ``-l``       ``--layer``       ``--plugin-registry-layer``
+      ``-L``       ``--layers``      ``--plugin-registry-layers``
+      n/a          ``--password``    ``--plugin-signing-password``
+      ============ ================= =============
+
+   *  Bare arguments are no longer allowed and treated as plugin identifiers or plugin JARs; all plugin identifiers must be specified via ``--plugin-identifier/-i`` or ``--plugin-identifiers/-I`` options and all plugin JARS via ``--plugin-jar/-j`` or ``--plugin-jars/-J`` options.
+
+   *  The ``usage`` command has been removed.
+
 -----
 0.5.0
 -----

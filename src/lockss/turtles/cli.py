@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2000-2024, Board of Trustees of Leland Stanford Jr. University
+# Copyright (c) 2000-2025, Board of Trustees of Leland Stanford Jr. University
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -28,50 +28,123 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import argparse
-import getpass
+"""
+Tool for managing LOCKSS plugin sets and LOCKSS plugin registries
+"""
+
+from getpass import getpass
 from pathlib import Path
-import sys
 
-import rich_argparse
+from lockss.pybasic.cliutil import BaseCli, StringCommand, COPYRIGHT_DESCRIPTION, LICENSE_DESCRIPTION, VERSION_DESCRIPTION
+from lockss.pybasic.fileutil import file_lines, path
+from lockss.pybasic.outpututil import OutputFormatOptions
+from pydantic.v1 import BaseModel, Field, FilePath
+from pydantic.v1.class_validators import validator
 import tabulate
+from typing import List, Optional
 
-import lockss.turtles
-from lockss.turtles.app import TurtlesApp
-from lockss.turtles.plugin_registry import PluginRegistryLayer
-from lockss.turtles.util import _path
-
-
-def _file_lines(path):
-    f = None
-    try:
-        f = open(_path(path), 'r') if path != '-' else sys.stdin
-        return [line for line in [line.partition('#')[0].strip() for line in f] if len(line) > 0]
-    finally:
-        if f is not None and path != '-':
-            f.close()
+from . import __copyright__, __license__, __version__
+from .app import TurtlesApp
 
 
-class TurtlesCli(object):
+class PluginBuildingOptions(BaseModel):
+    plugin_set_catalog: Optional[FilePath] = Field(aliases=['-s'], description=f'(plugin set catalog) load the plugin set catalog from the given file, or if none, from {" or ".join(map(str, TurtlesApp.default_plugin_set_catalogs()))}')
+    plugin_signing_credentials: Optional[FilePath] = Field(aliases=['-c'], description=f'(plugin signing credentials) load the plugin signing credentials from the given file, or if none, from {" or ".join(map(str, TurtlesApp.default_plugin_signing_credentials()))}')
+    plugin_signing_password: Optional[str] = Field(description='(plugin signing credentials) set the plugin signing password, or if none, prompt interactively')
 
-    PROG = 'turtles'
+
+class PluginDeploymentOptions(BaseModel):
+    plugin_registry_catalog: Optional[FilePath] = Field(aliases=['-r'], description=f'(plugin registry catalog) load the plugin registry catalog from the given file, or if none, from {" or ".join(map(str, TurtlesApp.default_plugin_registry_catalogs()))}')
+    plugin_registry_layer: Optional[List[str]] = Field(aliases=['-l'], description='(plugin registry layers) add one or more plugin registry layers to the set of plugin registry layers to process')
+    plugin_registry_layers: Optional[List[FilePath]] = Field(aliases=['-L'], description='(plugin registry layers) add the plugin registry layers listed in one or more files to the set of plugin registry layers to process')
+    testing: Optional[bool] = Field(False, aliases=['-t'], description='(plugin registry layers) synonym for --plugin-registry-layer testing (i.e. add "testing" to the list of plugin registry layers to process)')
+    production: Optional[bool] = Field(False, aliases=['-p'], description='(plugin registry layers) synonym for --plugin-registry-layer production (i.e. add "production" to the list of plugin registry layers to process)')
+
+    @validator('plugin_registry_layers', each_item=True, pre=True)
+    def _expand_each_plugin_registry_layers_path(cls, v: Path):
+        return path(v)
+
+    def get_plugin_registry_layers(self):
+        ret = [*self.plugin_registry_layer[:], *[file_lines(file_path) for file_path in self.plugin_registry_layers]]
+        for layer in reversed(['testing', 'production']):
+            if getattr(self, layer, False):
+                ret.insert(0, layer)
+        if len(ret) == 0:
+            raise RuntimeError('empty list of plugin registry layers')
+        return ret
+
+
+class PluginIdentifierOptions(BaseModel):
+    """
+    The --identifier/-i and --identifiers/-I options.
+    """
+    plugin_identifier: Optional[List[str]] = Field([], aliases=['-i'], description='(plugin identifiers) add one or more plugin identifiers to the set of plugin identifiers to process')
+    plugin_identifiers: Optional[List[FilePath]] = Field([], aliases=['-I'], description='(plugin identifiers) add the plugin identifiers listed in one or more files to the set of plugin identifiers to process')
+
+    @validator('plugin_identifiers', each_item=True, pre=True)
+    def _expand_each_plugin_identifiers_path(cls, v: Path):
+        return path(v)
+
+    def get_plugin_identifiers(self) -> List[str]:
+        ret = [*self.plugin_identifier[:], *[file_lines(file_path) for file_path in self.plugin_identifiers]]
+        if len(ret) == 0:
+            raise RuntimeError('empty list of plugin identifiers')
+        return ret
+
+
+class PluginJarOptions(BaseModel):
+    """
+    The --plugin-jar/-j and --plugin-jars/-J options.
+    """
+    plugin_jar: Optional[List[FilePath]] = Field([], aliases=['-j'], description='(plugin JARs) add one or more plugin JARs to the set of plugin JARs to process')
+    plugin_jars: Optional[List[FilePath]] = Field([], aliases=['-J'], description='(plugin JARs) add the plugin JARs listed in one or more files to the set of plugin JARs to process')
+
+    @validator('plugin_jar', 'plugin_jars', each_item=True, pre=True)
+    def _expand_each_plugin_jars_path(cls, v: Path):
+        return path(v)
+
+    def get_plugin_jars(self):
+        ret = [*self.plugin_jar[:], *[file_lines(file_path) for file_path in self.plugin_jars]]
+        if len(ret) == 0:
+            raise RuntimeError('empty list of plugin JARs')
+        return ret
+
+
+class NonInteractiveOptions(BaseModel):
+    non_interactive: Optional[bool] = Field(False, description='(plugin signing credentials) disallow interactive prompts')
+
+
+class BuildPluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginBuildingOptions, PluginIdentifierOptions):
+    pass
+
+
+class DeployPluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDeploymentOptions, PluginJarOptions):
+    pass
+
+
+class ReleasePluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDeploymentOptions, PluginBuildingOptions, PluginIdentifierOptions):
+    pass
+
+
+class TurtlesCommand(BaseModel):
+    bp: Optional[BuildPluginCommand] = Field(description='synonym for: build-plugin')
+    build_plugin: Optional[BuildPluginCommand] = Field(description='build (package and sign) plugins')
+    copyright: Optional[StringCommand.type(__copyright__)] = Field(description=COPYRIGHT_DESCRIPTION)
+    deploy_plugin: Optional[DeployPluginCommand] = Field(description='deploy plugins')
+    dp: Optional[DeployPluginCommand] = Field(description='synonym for: deploy-plugin')
+    license: Optional[StringCommand.type(__license__)] = Field(description=LICENSE_DESCRIPTION)
+    release_plugin: Optional[ReleasePluginCommand] = Field(description='release (build and deploy) plugins')
+    rp: Optional[ReleasePluginCommand] = Field(description='synonym for: release-plugin')
+    version: Optional[StringCommand.type(__version__)] = Field(description=VERSION_DESCRIPTION)
+
+
+class TurtlesCli(BaseCli[TurtlesCommand]):
 
     def __init__(self):
-        super().__init__()
-        self._app = TurtlesApp()
-        self._args = None
-        self._identifiers = None
-        self._jars = None
-        self._layers = None
-        self._parser = None
-        self._subparsers = None
-
-    def run(self):
-        self._make_parser()
-        self._args = self._parser.parse_args()
-        if self._args.debug_cli:
-            print(self._args)
-        self._args.fun()
+        super().__init__(model=TurtlesCommand,
+                         prog='turtles',
+                         description='Tool for managing LOCKSS plugin sets and LOCKSS plugin registries')
+        self._app: TurtlesApp = TurtlesApp()
 
     # def _analyze_registry(self):
     #     # Prerequisites
@@ -131,316 +204,82 @@ class TurtlesCli(object):
     #     if len(result) > 0:
     #         self._tabulate(title, result, headers)
 
-    def _build_plugin(self):
+    def _bp(self, build_plugin_command: BuildPluginCommand) -> None:
+        return self._build_plugin(build_plugin_command)
+
+    def _build_plugin(self, build_plugin_command: BuildPluginCommand) -> None:
         # Prerequisites
-        self._app.load_plugin_sets(self._args.plugin_set_catalog)
-        self._app.load_plugin_signing_credentials(self._args.plugin_signing_credentials)
-        self._obtain_password()
+        self._app.load_plugin_sets(build_plugin_command.plugin_set_catalog)
+        self._app.load_plugin_signing_credentials(build_plugin_command.plugin_signing_credentials)
+        self._obtain_password(build_plugin_command)
         # Action
         # ... plugin_id -> (set_id, jar_path, plugin)
-        ret = self._app.build_plugin(self._get_identifiers())
+        ret = self._app.build_plugin(build_plugin_command.get_plugin_identifiers())
         # Output
         print(tabulate.tabulate([[plugin_id, plugin.get_version(), set_id, jar_path] for plugin_id, (set_id, jar_path, plugin) in ret.items()],
                                 headers=['Plugin identifier', 'Plugin version', 'Plugin set', 'Plugin JAR'],
-                                tablefmt=self._args.output_format))
+                                tablefmt=build_plugin_command.output_format))
 
-    def _copyright(self):
-        print(lockss.turtles.__copyright__)
+    def _copyright(self, string_command: StringCommand) -> None:
+        self._do_string_command(string_command)
 
-    def _deploy_plugin(self):
+    def _deploy_plugin(self, deploy_plugin_command: DeployPluginCommand) -> None:
         # Prerequisites
-        self._app.load_plugin_registries(self._args.plugin_registry_catalog)
+        self._app.load_plugin_registries(deploy_plugin_command.plugin_registry_catalog)
         # Action
         # ... (src_path, plugin_id) -> list of (registry_id, layer_id, dst_path, plugin)
-        ret = self._app.deploy_plugin(self._get_jars(),
-                                      self._get_layers(),
-                                      interactive=self._args.interactive)
+        ret = self._app.deploy_plugin(deploy_plugin_command.get_plugin_jars(),
+                                      deploy_plugin_command.get_plugin_registry_layers(),
+                                      interactive=not deploy_plugin_command.non_interactive)
         # Output
         print(tabulate.tabulate([[src_path, plugin_id, plugin.get_version(), registry_id, layer_id, dst_path] for (src_path, plugin_id), val in ret.items() for registry_id, layer_id, dst_path, plugin in val],
                                 headers=['Plugin JAR', 'Plugin identifier', 'Plugin version', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
-                                tablefmt=self._args.output_format))
+                                tablefmt=deploy_plugin_command.output_format))
 
-    def _get_identifiers(self):
-        if self._identifiers is None:
-            self._identifiers = list()
-            self._identifiers.extend(self._args.remainder)
-            self._identifiers.extend(self._args.identifier)
-            for path in self._args.identifiers:
-                self._identifiers.extend(_file_lines(path))
-            if len(self._identifiers) == 0:
-                self._parser.error('list of plugin identifiers to build is empty')
-        return self._identifiers
+    def _do_string_command(self, string_command: StringCommand) -> None:
+        string_command()
 
-    def _get_jars(self):
-        if self._jars is None:
-            self._jars = list()
-            self._jars.extend(self._args.remainder)
-            self._jars.extend(self._args.jar)
-            for path in self._args.jars:
-                self._jars.extend(_file_lines(path))
-            if len(self._jars) == 0:
-                self._parser.error('list of plugin JARs to deploy is empty')
-        return self._jars
+    def _dp(self, deploy_plugin_command: DeployPluginCommand) -> None:
+        return self._deploy_plugin(deploy_plugin_command)
 
-    def _get_layers(self):
-        if self._layers is None:
-            self._layers = list()
-            self._layers.extend(self._args.layer)
-            for path in self._args.layers:
-                self._layers.extend(_file_lines(path))
-            if len(self._layers) == 0:
-                self._parser.error('list of plugin registry layers to process is empty')
-        return self._layers
+    def _license(self, string_command: StringCommand) -> None:
+        self._do_string_command(string_command)
 
-    def _license(self):
-        print(lockss.turtles.__license__)
-
-    def _make_option_debug_cli(self, container):
-        container.add_argument('--debug-cli',
-                               action='store_true',
-                               help='print the result of parsing command line arguments')
-
-    def _make_option_non_interactive(self, container):
-        container.add_argument('--non-interactive', '-n',
-                               dest='interactive',
-                               action='store_false', # note: default True
-                               help='disallow interactive prompts (default: allow)')
-
-    def _make_option_output_format(self, container):
-        container.add_argument('--output-format',
-                               metavar='FMT',
-                               choices=tabulate.tabulate_formats,
-                               default='simple',
-                               help='set tabular output format to %(metavar)s (default: %(default)s; choices: %(choices)s)')
-
-    def _make_option_password(self, container):
-        container.add_argument('--password',
-                               metavar='PASS',
-                               help='set the plugin signing password')
-
-    def _make_option_plugin_registry_catalog(self, container):
-        container.add_argument('--plugin-registry-catalog', '-r',
-                               metavar='FILE',
-                               type=Path,
-                               help=f'load plugin registry catalog from %(metavar)s (default: {" or ".join(map(str, self._app.default_plugin_registry_catalogs()))})')
-
-    def _make_option_plugin_set_catalog(self, container):
-        container.add_argument('--plugin-set-catalog', '-s',
-                               metavar='FILE',
-                               type=Path,
-                               help=f'load plugin set catalog from %(metavar)s (default: {" or ".join(map(str, self._app.default_plugin_set_catalogs()))})')
-
-    def _make_option_plugin_signing_credentials(self, container):
-        container.add_argument('--plugin-signing-credentials', '-c',
-                               metavar='FILE',
-                               type=Path,
-                               help=f'load plugin signing credentials from %(metavar)s (default: {" or ".join(map(str, self._app.default_plugin_signing_credentials()))})')
-
-    def _make_option_production(self, container):
-        container.add_argument('--production', '-p',
-                               dest='layer',
-                               action='append_const',
-                               const=PluginRegistryLayer.PRODUCTION,
-                               help="synonym for --layer=%(const)s (i.e. add '%(const)s' to the list of plugin registry layers to process)")
-
-    def _make_option_testing(self, container):
-        container.add_argument('--testing', '-t',
-                               dest='layer',
-                               action='append_const',
-                               const=PluginRegistryLayer.TESTING,
-                               help="synonym for --layer=%(const)s (i.e. add '%(const)s' to the list of plugin registry layers to process)")
-
-    def _make_options_identifiers(self, container):
-        group = container.add_argument_group(title='plugin identifier arguments and options')
-        group.add_argument('--identifier', '-i',
-                           metavar='PLUGID',
-                           action='append',
-                           default=list(),
-                           help='add %(metavar)s to the list of plugin identifiers to build')
-        group.add_argument('--identifiers', '-I',
-                           metavar='FILE',
-                           action='append',
-                           default=list(),
-                           help='add the plugin identifiers in %(metavar)s to the list of plugin identifiers to build')
-        group.add_argument('remainder',
-                            metavar='PLUGID',
-                            nargs='*',
-                            help='plugin identifier to build')
-
-    def _make_options_jars(self, container):
-        group = container.add_argument_group(title='plugin JAR arguments and options')
-        group.add_argument('--jar', '-j',
-                           metavar='PLUGJAR',
-                           type=Path,
-                           action='append',
-                           default=list(),
-                           help='add %(metavar)s to the list of plugin JARs to deploy')
-        group.add_argument('--jars', '-J',
-                           metavar='FILE',
-                           action='append',
-                           default=list(),
-                           help='add the plugin JARs in %(metavar)s to the list of plugin JARs to deploy')
-        group.add_argument('remainder',
-                           metavar='PLUGJAR',
-                           nargs='*',
-                           help='plugin JAR to deploy')
-
-    def _make_options_layers(self, container):
-        group = container.add_argument_group(title='plugin registry layer options')
-        group.add_argument('--layer', '-l',
-                           metavar='LAYER',
-                           action='append',
-                           default=list(),
-                           help='add %(metavar)s to the list of plugin registry layers to process')
-        group.add_argument('--layers', '-L',
-                           metavar='FILE',
-                           action='append',
-                           default=list(),
-                           help='add the layers in %(metavar)s to the list of plugin registry layers to process')
-
-    def _make_parser(self):
-        for cls in [rich_argparse.RichHelpFormatter]:
-            cls.styles.update({
-                'argparse.args': f'bold {cls.styles["argparse.args"]}',
-                'argparse.groups': f'bold {cls.styles["argparse.groups"]}',
-                'argparse.metavar': f'bold {cls.styles["argparse.metavar"]}',
-                'argparse.prog': f'bold {cls.styles["argparse.prog"]}',
-            })
-        self._parser = argparse.ArgumentParser(prog=TurtlesCli.PROG,
-                                               formatter_class=rich_argparse.RichHelpFormatter)
-        self._subparsers = self._parser.add_subparsers(title='commands',
-                                                       description="Add --help to see the command's own help message.",
-                                                       # With subparsers, metavar is also used as the heading of the column of subcommands
-                                                       metavar='COMMAND',
-                                                       # With subparsers, help is used as the heading of the column of subcommand descriptions
-                                                       help='DESCRIPTION')
-        self._make_option_debug_cli(self._parser)
-        self._make_option_non_interactive(self._parser)
-        #self._make_parser_analyze_registry(self._subparsers)
-        self._make_parser_build_plugin(self._subparsers)
-        self._make_parser_copyright(self._subparsers)
-        self._make_parser_deploy_plugin(self._subparsers)
-        self._make_parser_license(self._subparsers)
-        self._make_parser_release_plugin(self._subparsers)
-        self._make_parser_usage(self._subparsers)
-        self._make_parser_version(self._subparsers)
-
-    # def _make_parser_analyze_registry(self, container):
-    #     parser = container.add_parser('analyze-registry', aliases=['ar'],
-    #                                   description='Analyze plugin registries',
-    #                                   help='analyze plugin registries')
-    #     parser.set_defaults(fun=self._analyze_registry)
-    #     self._make_option_plugin_registry_catalog(parser)
-    #     self._make_option_plugin_set_catalog(parser)
-    #     self._make_option_plugin_signing(parser)
-
-    def _make_parser_build_plugin(self, container):
-        parser = container.add_parser('build-plugin', aliases=['bp'],
-                                      description='Build (package and sign) plugins.',
-                                      help='build (package and sign) plugins',
-                                      formatter_class=self._parser.formatter_class)
-        parser.set_defaults(fun=self._build_plugin)
-        self._make_option_output_format(parser)
-        self._make_option_password(parser)
-        self._make_option_plugin_set_catalog(parser)
-        self._make_option_plugin_signing_credentials(parser)
-        self._make_options_identifiers(parser)
-
-    def _make_parser_copyright(self, container):
-        parser = container.add_parser('copyright',
-                                      description='Show copyright and exit.',
-                                      help='show copyright and exit',
-                                      formatter_class=self._parser.formatter_class)
-        parser.set_defaults(fun=self._copyright)
-
-    def _make_parser_deploy_plugin(self, container):
-        parser = container.add_parser('deploy-plugin', aliases=['dp'],
-                                      description='Deploy plugins.',
-                                      help='deploy plugins',
-                                      formatter_class=self._parser.formatter_class)
-        parser.set_defaults(fun=self._deploy_plugin)
-        self._make_option_output_format(parser)
-        self._make_option_plugin_registry_catalog(parser)
-        self._make_option_production(parser)
-        self._make_option_testing(parser)
-        self._make_options_jars(parser)
-        self._make_options_layers(parser)
-
-    def _make_parser_license(self, container):
-        parser = container.add_parser('license',
-                                      description='Show license and exit.',
-                                      help='show license and exit',
-                                      formatter_class=self._parser.formatter_class)
-        parser.set_defaults(fun=self._license)
-
-    def _make_parser_release_plugin(self, container):
-        parser = container.add_parser('release-plugin', aliases=['rp'],
-                                      description='Release (build and deploy) plugins.',
-                                      help='release (build and deploy) plugins',
-                                      formatter_class=self._parser.formatter_class)
-        parser.set_defaults(fun=self._release_plugin)
-        self._make_option_output_format(parser)
-        self._make_option_password(parser)
-        self._make_option_plugin_registry_catalog(parser)
-        self._make_option_plugin_set_catalog(parser)
-        self._make_option_plugin_signing_credentials(parser)
-        self._make_option_production(parser)
-        self._make_option_testing(parser)
-        self._make_options_identifiers(parser)
-        self._make_options_layers(parser)
-
-    def _make_parser_usage(self, container):
-        parser = container.add_parser('usage',
-                                      description='Show detailed usage and exit.',
-                                      help='show detailed usage and exit',
-                                      formatter_class=self._parser.formatter_class)
-        parser.set_defaults(fun=self._usage)
-
-    def _make_parser_version(self, container):
-        parser = container.add_parser('version',
-                                      description='Show version and exit.',
-                                      help='show version and exit',
-                                      formatter_class=self._parser.formatter_class)
-        parser.set_defaults(fun=self._version)
-
-    def _obtain_password(self):
-        if self._args.password is not None:
-            _p = self._args.password
-        elif self._args.interactive:
-            _p = getpass.getpass('Plugin signing password: ')
+    def _obtain_password(self, non_interactive_options: NonInteractiveOptions) -> None:
+        if non_interactive_options.plugin_signing_password is not None:
+            _p = non_interactive_options.plugin_signing_password
+        elif non_interactive_options.non_interactive:
+            _p = getpass('Plugin signing password: ')
         else:
             self._parser.error('no plugin signing password specified while in non-interactive mode')
         self._app.set_password(lambda: _p)
 
-    def _release_plugin(self):
+    def _release_plugin(self, release_plugin_command: ReleasePluginCommand) -> None:
         # Prerequisites
-        self._app.load_plugin_sets(self._args.plugin_set_catalog)
-        self._app.load_plugin_registries(self._args.plugin_registry_catalog)
-        self._app.load_plugin_signing_credentials(self._args.plugin_signing_credentials)
-        self._obtain_password()
+        self._app.load_plugin_sets(release_plugin_command.plugin_set_catalog)
+        self._app.load_plugin_registries(release_plugin_command.plugin_registry_catalog)
+        self._app.load_plugin_signing_credentials(release_plugin_command.plugin_signing_credentials)
+        self._obtain_password(release_plugin_command)
         # Action
         # ... plugin_id -> list of (registry_id, layer_id, dst_path, plugin)
-        ret = self._app.release_plugin(self._get_identifiers(),
-                                       self._get_layers(),
-                                       interactive=self._args.interactive)
+        ret = self._app.release_plugin(release_plugin_command.get_plugin_identifiers(),
+                                       release_plugin_command.get_plugin_registry_layers(),
+                                       interactive=not release_plugin_command.non_interactive)
         # Output
         print(tabulate.tabulate([[plugin_id, plugin.get_version(), registry_id, layer_id, dst_path] for plugin_id, val in ret.items() for registry_id, layer_id, dst_path, plugin in val],
                                 headers=['Plugin identifier', 'Plugin version', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
-                                tablefmt=self._args.output_format))
+                                tablefmt=release_plugin_command.output_format))
 
-    def _usage(self):
-        self._parser.print_usage()
-        print()
-        uniq = set()
-        for cmd, par in self._subparsers.choices.items():
-            if par not in uniq:
-                uniq.add(par)
-                for s in par.format_usage().split('\n'):
-                    usage = 'usage: '
-                    print(f'{" " * len(usage)}{s[len(usage):]}' if s.startswith(usage) else s)
+    def _rp(self, release_plugin_command: ReleasePluginCommand) -> None:
+        self._release_plugin(release_plugin_command)
 
-    def _version(self):
-        print(lockss.turtles.__version__)
+    def _version(self, string_command: StringCommand) -> None:
+        self._do_string_command(string_command)
+
 
 def main():
     TurtlesCli().run()
+
+
+if __name__ == '__main__':
+    main()

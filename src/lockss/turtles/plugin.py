@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2000-2024, Board of Trustees of Leland Stanford Jr. University
+# Copyright (c) 2000-2025, Board of Trustees of Leland Stanford Jr. University
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -28,40 +28,89 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from pathlib import Path
-import xml.etree.ElementTree
-import zipfile
+"""
+Library to represent a LOCKSS plugin.
+"""
 
-import java_manifest
+# Remove in Python 3.14
+# See https://stackoverflow.com/questions/33533148/how-do-i-type-hint-a-method-with-the-type-of-the-enclosing-class/33533514#33533514
+from __future__ import annotations
 
-from lockss.turtles.util import _path
+from collections.abc import Callable
+from pathlib import Path, PurePath
+from typing import Any, List, Optional, Union
+import xml.etree.ElementTree as ET
+from zipfile import ZipFile
+
+import java_manifest as JM
+from lockss.pybasic.fileutil import path
 
 
 class Plugin(object):
 
+    def __init__(self, plugin_file, plugin_path) -> None:
+        super().__init__()
+        self._path = plugin_path
+        self._parsed = ET.parse(plugin_file).getroot()
+        tag = self._parsed.tag
+        if tag != 'map':
+            raise RuntimeError(f'{plugin_path!s}: invalid root element: {tag}')
+
+    def get_aux_packages(self) -> List[str]:
+        key = 'plugin_aux_packages'
+        lst = [x[1] for x in self._parsed.findall('entry') if x[0].tag == 'string' and x[0].text == key]
+        if lst is None or len(lst) < 1:
+            return []
+        if len(lst) > 1:
+            raise ValueError(f'plugin declares {len(lst)} entries for {key}')
+        return [x.text for x in lst[0].findall('string')]
+
+    def get_identifier(self) -> Optional[str]:
+        return self._only_one('plugin_identifier')
+
+    def get_name(self) -> Optional[str]:
+        return self._only_one('plugin_name')
+
+    def get_parent_identifier(self) -> Optional[str]:
+        return self._only_one('plugin_parent')
+
+    def get_parent_version(self) -> Optional[int]:
+        return self._only_one('plugin_parent_version', int)
+
+    def get_version(self) -> Optional[int]:
+        return self._only_one('plugin_version', int)
+
+    def _only_one(self, key: str, result: Callable=str) -> Optional[Any]:
+        lst = [x[1].text for x in self._parsed.findall('entry') if x[0].tag == 'string' and x[0].text == key]
+        if lst is None or len(lst) < 1:
+            return None
+        if len(lst) > 1:
+            raise ValueError(f'plugin declares {len(lst)} entries for {key}')
+        return result(lst[0])
+
     @staticmethod
-    def from_jar(jar_path):
-        jar_path = _path(jar_path)  # in case it's a string
+    def from_jar(jar_path: Union[PurePath, str]) -> Plugin:
+        jar_path = path(jar_path)  # in case it's a string
         plugin_id = Plugin.id_from_jar(jar_path)
         plugin_fstr = str(Plugin.id_to_file(plugin_id))
-        with zipfile.ZipFile(jar_path, 'r') as zip_file:
+        with ZipFile(jar_path, 'r') as zip_file:
             with zip_file.open(plugin_fstr, 'r') as plugin_file:
                 return Plugin(plugin_file, plugin_fstr)
 
     @staticmethod
-    def from_path(path):
-        path = _path(path)  # in case it's a string
-        with open(path, 'r') as input_file:
-            return Plugin(input_file, path)
+    def from_path(fpath: Union[PurePath, str]) -> Plugin:
+        fpath = path(fpath)  # in case it's a string
+        with open(fpath, 'r') as input_file:
+            return Plugin(input_file, fpath)
 
     @staticmethod
-    def file_to_id(plugin_fstr):
+    def file_to_id(plugin_fstr: str) -> str:
         return plugin_fstr.replace('/', '.')[:-4]  # 4 is len('.xml')
 
     @staticmethod
-    def id_from_jar(jar_path):
-        jar_path = _path(jar_path)  # in case it's a string
-        manifest = java_manifest.from_jar(jar_path)
+    def id_from_jar(jar_path: Union[PurePath, str]) -> str:
+        jar_path = path(jar_path)  # in case it's a string
+        manifest = JM.from_jar(jar_path)
         for entry in manifest:
             if entry.get('Lockss-Plugin') == 'true':
                 name = entry.get('Name')
@@ -72,49 +121,9 @@ class Plugin(object):
             raise Exception(f'{jar_path!s}: no Lockss-Plugin entry in META-INF/MANIFEST.MF')
 
     @staticmethod
-    def id_to_dir(plugin_id):
+    def id_to_dir(plugin_id: str) -> Path:
         return Plugin.id_to_file(plugin_id).parent
 
     @staticmethod
-    def id_to_file(plugin_id):
+    def id_to_file(plugin_id: str) -> Path:
         return Path(f'{plugin_id.replace(".", "/")}.xml')
-
-    def __init__(self, plugin_file, plugin_path):
-        super().__init__()
-        self._path = plugin_path
-        self._parsed = xml.etree.ElementTree.parse(plugin_file).getroot()
-        tag = self._parsed.tag
-        if tag != 'map':
-            raise RuntimeError(f'{plugin_path!s}: invalid root element: {tag}')
-
-    def get_aux_packages(self):
-        key = 'plugin_aux_packages'
-        lst = [x[1] for x in self._parsed.findall('entry') if x[0].tag == 'string' and x[0].text == key]
-        if lst is None or len(lst) < 1:
-            return []
-        if len(lst) > 1:
-            raise ValueError(f'plugin declares {len(lst)} entries for {key}')
-        return [x.text for x in lst[0].findall('string')]
-
-    def get_identifier(self):
-        return self._only_one('plugin_identifier')
-
-    def get_name(self):
-        return self._only_one('plugin_name')
-
-    def get_parent_identifier(self):
-        return self._only_one('plugin_parent')
-
-    def get_parent_version(self):
-        return self._only_one('plugin_parent_version', int)
-
-    def get_version(self):
-        return self._only_one('plugin_version', int)
-
-    def _only_one(self, key, result=str):
-        lst = [x[1].text for x in self._parsed.findall('entry') if x[0].tag == 'string' and x[0].text == key]
-        if lst is None or len(lst) < 1:
-            return None
-        if len(lst) > 1:
-            raise ValueError(f'plugin declares {len(lst)} entries for {key}')
-        return result(lst[0])

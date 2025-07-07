@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2000-2024, Board of Trustees of Leland Stanford Jr. University
+# Copyright (c) 2000-2025, Board of Trustees of Leland Stanford Jr. University
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -28,28 +28,26 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from pathlib import Path, PurePath
 import json
+from pathlib import Path
+from typing import Any, List, TypeAlias, Union
 
 import jsonschema
 import jsonschema.exceptions
 import yaml
 
 
-def _load_and_validate(schema_path, instance_path, multiple=False):
+YamlT: TypeAlias = Any
+
+
+def load_and_validate(schema_path: Path, instance_path: Path, multiple: bool=False) -> Union[List[YamlT], YamlT]:
     with schema_path.open('r') as f:
         schema = json.load(f)
     with instance_path.open('r') as f:
-        ret = list(yaml.safe_load_all(f) if multiple else [yaml.safe_load(f)])
+        ret = list(yaml.safe_load_all(f)) if multiple else [yaml.safe_load(f)]
     for instance in ret:
         try:
             jsonschema.validate(instance, schema)
         except jsonschema.exceptions.ValidationError as validation_exception:
             raise Exception(validation_exception.message) from validation_exception
     return ret if multiple else ret[0]
-
-
-def _path(purepath_or_string):
-    if not issubclass(type(purepath_or_string), PurePath):
-        purepath_or_string = Path(purepath_or_string)
-    return purepath_or_string.expanduser().resolve()
