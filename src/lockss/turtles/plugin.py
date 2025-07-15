@@ -37,13 +37,16 @@ Library to represent a LOCKSS plugin.
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Any, List, Optional, Union
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 
 import java_manifest as JM
 from lockss.pybasic.fileutil import path
+
+
+PluginIdentifier = str
 
 
 class Plugin(object):
@@ -65,13 +68,13 @@ class Plugin(object):
             raise ValueError(f'plugin declares {len(lst)} entries for {key}')
         return [x.text for x in lst[0].findall('string')]
 
-    def get_identifier(self) -> Optional[str]:
+    def get_identifier(self) -> Optional[PluginIdentifier]:
         return self._only_one('plugin_identifier')
 
     def get_name(self) -> Optional[str]:
         return self._only_one('plugin_name')
 
-    def get_parent_identifier(self) -> Optional[str]:
+    def get_parent_identifier(self) -> Optional[PluginIdentifier]:
         return self._only_one('plugin_parent')
 
     def get_parent_version(self) -> Optional[int]:
@@ -89,7 +92,7 @@ class Plugin(object):
         return result(lst[0])
 
     @staticmethod
-    def from_jar(jar_path: Union[PurePath, str]) -> Plugin:
+    def from_jar(jar_path: Union[Path, str]) -> Plugin:
         jar_path = path(jar_path)  # in case it's a string
         plugin_id = Plugin.id_from_jar(jar_path)
         plugin_fstr = str(Plugin.id_to_file(plugin_id))
@@ -98,17 +101,17 @@ class Plugin(object):
                 return Plugin(plugin_file, plugin_fstr)
 
     @staticmethod
-    def from_path(fpath: Union[PurePath, str]) -> Plugin:
+    def from_path(fpath: Union[Path, str]) -> Plugin:
         fpath = path(fpath)  # in case it's a string
         with open(fpath, 'r') as input_file:
             return Plugin(input_file, fpath)
 
     @staticmethod
-    def file_to_id(plugin_fstr: str) -> str:
+    def file_to_id(plugin_fstr: str) -> PluginIdentifier:
         return plugin_fstr.replace('/', '.')[:-4]  # 4 is len('.xml')
 
     @staticmethod
-    def id_from_jar(jar_path: Union[PurePath, str]) -> str:
+    def id_from_jar(jar_path: Union[Path, str]) -> PluginIdentifier:
         jar_path = path(jar_path)  # in case it's a string
         manifest = JM.from_jar(jar_path)
         for entry in manifest:

@@ -33,102 +33,77 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-import importlib.resources as IR
 import os
-from pathlib import Path, PurePath
+from pathlib import Path
 import shlex
 import subprocess
 import sys
-from typing import List, Tuple, Union
+from typing import Annotated, Any, ClassVar, Dict, List, Literal, Optional, Self, Tuple, Union
 
+import yaml
 from lockss.pybasic.fileutil import path
+from pydantic import BaseModel, Field
 
-from . import resources as __resources__
 from .plugin import Plugin
-from .util import YamlT, load_and_validate
+from .util import BaseModelWithRoot
 
 
-class PluginSetCatalog(object):
+class PluginSetCatalog(BaseModelWithRoot):
+    kind: Literal['PluginSetCatalog'] = Field(description="This object's kind")
+    plugin_set_files: List[str] = Field(min_length=1, description="A non-empty list of plugin set files", title='Plugin Set Files', alias='plugin-set-files')
 
-    PLUGIN_SET_CATALOG_SCHEMA = 'plugin-set-catalog-schema.json'
-
-    def __init__(self, parsed: YamlT) -> None:
-        super().__init__()
-        self._parsed: YamlT = parsed
-
-    def get_plugin_set_files(self) -> List[str]:
-        return self._parsed['plugin-set-files']
-
-    @staticmethod
-    def from_path(plugin_set_catalog_path: Union[PurePath, str]) -> PluginSetCatalog:
-        plugin_set_catalog_path = path(plugin_set_catalog_path)
-        with IR.path(__resources__, PluginSetCatalog.PLUGIN_SET_CATALOG_SCHEMA) as plugin_set_catalog_schema_path:
-            parsed = load_and_validate(plugin_set_catalog_schema_path, plugin_set_catalog_path)
-            return PluginSetCatalog(parsed)
+    def get_plugin_set_files(self) -> List[Path]:
+        return [self._get_root().joinpath(p) for p in self.plugin_set_files]
 
 
-class PluginSet(ABC):
+PluginSetBuilderType = Literal['ant', 'maven']
 
-    PLUGIN_SET_SCHEMA = 'plugin-set-schema.json'
 
-    def __init__(self, parsed: YamlT) -> None:
-        super().__init__()
-        self._parsed: YamlT = parsed
+class BasePluginSetBuilder(BaseModelWithRoot, ABC):
+    TYPE_FIELD: ClassVar[Dict[str, str]] = dict(description='A plugin builder type', title='Plugin Builder Type')
+    MAIN_FIELD: ClassVar[Dict[str, str]] = dict(description="The path to the plugins' source code, relative to the root of the project", title='Main Code Path')
+    TEST_FIELD: ClassVar[Dict[str, str]] = dict(description="The path to the plugins' unit tests, relative to the root of the project", title='Test Code Path')
 
     @abstractmethod
-    def build_plugin(self, plugin_id, keystore_path, keystore_alias, keystore_password=None) -> Tuple[Path, Plugin]:
+    def build_plugin(self, plugin_id: str, keystore_path: Path, keystore_alias: str, keystore_password=None) -> Tuple[Path, Plugin]:
         pass
 
-    def get_builder_type(self) -> str:
-        return self._parsed['builder']['type']
+    def get_main(self) -> Path:
+        return self._get_root().joinpath(self._get_main())
 
-    def get_id(self) -> str:
-        return self._parsed['id']
+    def get_test(self) -> Path:
+        return self._get_root().joinpath(self._get_test())
 
-    def get_name(self) -> str:
-        return self._parsed['name']
+    def get_type(self) -> PluginSetBuilderType:
+        return getattr(self, 'type')
 
-    @abstractmethod
     def has_plugin(self, plugin_id: str) -> bool:
-        pass
+        return self._plugin_path(plugin_id).is_file()
 
-    @abstractmethod
     def make_plugin(self, plugin_id: str) -> Plugin:
-        pass
+        return Plugin.from_path(self._plugin_path(plugin_id))
 
-    @staticmethod
-    def from_path(plugin_set_file_path) -> List[PluginSet]:
-        plugin_set_file_path = path(plugin_set_file_path)
-        with IR.path(__resources__, PluginSet.PLUGIN_SET_SCHEMA) as plugin_set_schema_path:
-            lst = load_and_validate(plugin_set_schema_path, plugin_set_file_path, multiple=True)
-            return [PluginSet._from_obj(parsed, plugin_set_file_path) for parsed in lst]
+    def _get_main(self) -> str:
+        return getattr(self, 'main')
 
-    @staticmethod
-    def _from_obj(parsed: YamlT, plugin_set_file_path: Path) -> PluginSet:
-        typ = parsed['builder']['type']
-        if typ == AntPluginSet.TYPE:
-            return AntPluginSet(parsed, plugin_set_file_path)
-        elif typ == MavenPluginSet.TYPE:
-            return MavenPluginSet(parsed, plugin_set_file_path)
-        else:
-            raise Exception(f'{plugin_set_file_path!s}: unknown builder type: {typ}')
+    def _get_test(self) -> str:
+        return getattr(self, 'test')
+
+    def _plugin_path(self, plugin_id: str) -> Path:
+        return self.get_main_path().joinpath(Plugin.id_to_file(plugin_id))
 
 
-class AntPluginSet(PluginSet):
+class AntPluginSetBuilder(BasePluginSetBuilder):
+    DEFAULT_MAIN: ClassVar[str] = 'plugins/src'
+    DEFAULT_TEST: ClassVar[str] = 'plugins/test/src'
 
-    TYPE = 'ant'
+    type: Literal['ant'] = Field(**BasePluginSetBuilder.TYPE_FIELD)
+    main: Optional[str] = Field(DEFAULT_MAIN, **BasePluginSetBuilder.MAIN_FIELD)
+    test: Optional[str] = Field(DEFAULT_TEST, **BasePluginSetBuilder.TEST_FIELD)
 
-    DEFAULT_MAIN = 'plugins/src'
+    _built: bool
 
-    DEFAULT_TEST = 'plugins/test/src'
-
-    def __init__(self, parsed: YamlT, fpath: Path) -> None:
-        super().__init__(parsed)
-        self._built: bool = False
-        self._root: Path = fpath.parent
-
-    # Returns (jar_path, plugin)
-    def build_plugin(self, plugin_id, keystore_path, keystore_alias, keystore_password=None) -> Tuple[Path, Plugin]:
+    def build_plugin(self, plugin_id: str, keystore_path: Path, keystore_alias: str, keystore_password=None) -> Tuple[Path, Plugin]:
         # Prerequisites
         if 'JAVA_HOME' not in os.environ:
             raise Exception('error: JAVA_HOME must be set in your environment')
@@ -137,38 +112,17 @@ class AntPluginSet(PluginSet):
         # Little build
         return self._little_build(plugin_id, keystore_path, keystore_alias, keystore_password=keystore_password)
 
-    def get_main(self) -> str:
-        return self._parsed.get('main', AntPluginSet.DEFAULT_MAIN)
-
-    def get_main_path(self) -> Path:
-        return self.get_root_path().joinpath(self.get_main())
-
-    def get_root(self) -> Path:
-        return self._root
-
-    def get_root_path(self) -> Path:
-        return self.get_root().expanduser().resolve()
-
-    def get_test(self) -> str:
-        return self._parsed.get('test', AntPluginSet.DEFAULT_TEST)
-
-    def get_test_path(self) -> Path:
-        return self.get_root_path().joinpath(self.get_test())
-
-    def has_plugin(self, plugin_id: str) -> bool:
-        return self._plugin_path(plugin_id).is_file()
-
-    def make_plugin(self, plugin_id: str) -> Plugin:
-        return Plugin.from_path(self._plugin_path(plugin_id))
+    def model_post_init(self, context: Any) -> None:
+        super().model_post_init(context)
+        self._built = False
 
     def _big_build(self) -> None:
         if not self._built:
             # Do build
             subprocess.run('ant load-plugins',
-                           shell=True, cwd=self.get_root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+                           shell=True, cwd=self._get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             self._built = True
 
-    # Returns (jar_path, plugin)
     def _little_build(self, plugin_id: str, keystore_path: Path, keystore_alias: str, keystore_password: str=None) -> Tuple[Path, Plugin]:
         orig_plugin = None
         cur_id = plugin_id
@@ -187,14 +141,14 @@ class AntPluginSet(PluginSet):
             cur_id = cur_plugin.get_parent_identifier()
         # Invoke jarplugin
         jar_fstr = Plugin.id_to_file(plugin_id)
-        jar_path = self.get_root_path().joinpath('plugins/jars', f'{plugin_id}.jar')
+        jar_path = self._get_root().joinpath('plugins/jars', f'{plugin_id}.jar')
         jar_path.parent.mkdir(parents=True, exist_ok=True)
         cmd = ['test/scripts/jarplugin',
                '-j', str(jar_path),
                '-p', str(jar_fstr)]
         for d in dirs:
             cmd.extend(['-d', d])
-        subprocess.run(cmd, cwd=self.get_root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+        subprocess.run(cmd, cwd=self._get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
         # Invoke signplugin
         cmd = ['test/scripts/signplugin',
                '--jar', str(jar_path),
@@ -203,7 +157,7 @@ class AntPluginSet(PluginSet):
         if keystore_password is not None:
             cmd.extend(['--password', keystore_password])
         try:
-            subprocess.run(cmd, cwd=self.get_root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+            subprocess.run(cmd, cwd=self._get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
         except subprocess.CalledProcessError as cpe:
             raise self._sanitize(cpe)
         if not jar_path.is_file():
@@ -222,47 +176,23 @@ class AntPluginSet(PluginSet):
         return called_process_error
 
 
-class MavenPluginSet(PluginSet):
+class MavenPluginSetBuilder(BasePluginSetBuilder):
+    DEFAULT_MAIN: ClassVar[str] = 'src/main/java'
+    DEFAULT_TEST: ClassVar[str] = 'src/test/java'
 
-    TYPE = 'maven'
+    type: Literal['maven'] = Field(**BasePluginSetBuilder.TYPE_FIELD)
+    main: Optional[str] = Field(DEFAULT_MAIN, **BasePluginSetBuilder.MAIN_FIELD)
+    test: Optional[str] = Field(DEFAULT_TEST, **BasePluginSetBuilder.TEST_FIELD)
 
-    DEFAULT_MAIN = 'src/main/java'
+    _built: bool
 
-    DEFAULT_TEST = 'src/test/java'
-
-    def __init__(self, parsed: YamlT, root: Path) -> None:
-        super().__init__(parsed)
-        self._built: bool = False
-        self._root: Path = root.parent
-
-    # Returns (jar_path, plugin)
     def build_plugin(self, plugin_id: str, keystore_path: Path, keystore_alias: str, keystore_password=None) -> Tuple[Path, Plugin]:
         self._big_build(keystore_path, keystore_alias, keystore_password=keystore_password)
         return self._little_build(plugin_id)
 
-    def get_main(self) -> str:
-        return self._parsed.get('main', MavenPluginSet.DEFAULT_MAIN)
-
-    def get_main_path(self) -> Path:
-        return self.get_root_path().joinpath(self.get_main())
-
-    def get_root(self) -> Path:
-        return self._root
-
-    def get_root_path(self) -> Path:
-        return self.get_root().expanduser().resolve()
-
-    def get_test(self) -> str:
-        return self._parsed.get('test', MavenPluginSet.DEFAULT_TEST)
-
-    def get_test_path(self) -> Path:
-        return self.get_root_path().joinpath(self.get_test())
-
-    def has_plugin(self, plugin_id) -> bool:
-        return self._plugin_path(plugin_id).is_file()
-
-    def make_plugin(self, plugin_id) -> Plugin:
-        return Plugin.from_path(self._plugin_path(plugin_id))
+    def model_post_init(self, context: Any) -> None:
+        super().model_post_init(context)
+        self._built = False
 
     def _big_build(self, keystore_path: Path, keystore_alias: str, keystore_password: str=None) -> None:
         if not self._built:
@@ -272,20 +202,16 @@ class MavenPluginSet(PluginSet):
                    f'-Dkeystore.alias={keystore_alias}',
                    f'-Dkeystore.password={keystore_password}']
             try:
-                subprocess.run(cmd, cwd=self.get_root_path(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+                subprocess.run(cmd, cwd=self._get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             except subprocess.CalledProcessError as cpe:
                 raise self._sanitize(cpe)
             self._built = True
 
-    # Returns (jar_path, plugin)
     def _little_build(self, plugin_id: str) -> Tuple[Path, Plugin]:
-        jar_path = self.get_root_path().joinpath('target', 'pluginjars', f'{plugin_id}.jar')
+        jar_path = self._get_root().joinpath('target', 'pluginjars', f'{plugin_id}.jar')
         if not jar_path.is_file():
             raise Exception(f'{plugin_id}: built JAR not found: {jar_path!s}')
         return jar_path, Plugin.from_jar(jar_path)
-
-    def _plugin_path(self, plugin_id) -> Path:
-        return self.get_main_path().joinpath(Plugin.id_to_file(plugin_id))
 
     def _sanitize(self, called_process_error: subprocess.CalledProcessError) -> subprocess.CalledProcessError:
         cmd = called_process_error.cmd[:]
@@ -294,3 +220,38 @@ class MavenPluginSet(PluginSet):
                 cmd[i] = '-Dkeystore.password=<password>'
         called_process_error.cmd = ' '.join([shlex.quote(c) for c in cmd])
         return called_process_error
+
+
+PluginSetBuilder = Annotated[Union[AntPluginSetBuilder, MavenPluginSetBuilder], Field(discriminator='type')]
+
+
+PluginSetIdentifier = str
+
+
+class PluginSet(BaseModel):
+    kind: Literal['PluginSet'] = Field(description="This object's kind")
+    id: PluginSetIdentifier = Field(description='An identifier for the plugin set')
+    name: str = Field(description='A name for the plugin set')
+    builder: PluginSetBuilder = Field(description='A builder for the plugin set', title='Plugin Set Builder')
+
+    def build_plugin(self, plugin_id: str, keystore_path: Path, keystore_alias: str, keystore_password=None) -> Tuple[Path, Plugin]:
+        return self.builder.build_plugin(plugin_id, keystore_path, keystore_alias, keystore_password)
+
+    def get_builder(self) -> PluginSetBuilder:
+        return self.builder
+
+    def get_id(self) -> PluginSetIdentifier:
+        return self.id
+
+    def get_name(self) -> str:
+        return self.name
+
+    def has_plugin(self, plugin_id: str) -> bool:
+        return self.get_builder().has_plugin(plugin_id)
+
+    def make_plugin(self, plugin_id: str) -> Plugin:
+        return self.get_builder().make_plugin(plugin_id)
+
+    def _initialize(self, root: Path) -> Self:
+        self.get_builder()._initialize(root)
+        return self

@@ -33,171 +33,98 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-import importlib.resources as IR
 from pathlib import Path
 import subprocess
-from typing import List, Optional, Tuple, Union
+from typing import Annotated, Any, ClassVar, Dict, List, Literal, Optional, Self, Tuple, Union
 
+from lockss.pybasic.errorutil import InternalError
 from lockss.pybasic.fileutil import path
+from pydantic import BaseModel, Field
 
-from . import resources as __resources__
 from .plugin import Plugin
-from .util import YamlT, load_and_validate
+from .util import BaseModelWithRoot
 
 
-class PluginRegistryCatalog(object):
+class PluginRegistryCatalog(BaseModelWithRoot):
+    kind: Literal['PluginRegistryCatalog'] = Field(description="This object's kind")
+    plugin_registry_files: List[str] = Field(min_length=1, description="A non-empty list of plugin registry files", title='Plugin Registry Files', alias='plugin-registry-files')
 
-    PLUGIN_REGISTRY_CATALOG_SCHEMA = 'plugin-registry-catalog-schema.json'
-
-    def __init__(self, parsed: YamlT) -> None:
-        super().__init__()
-        self._parsed: YamlT = parsed
-
-    def get_plugin_registry_files(self) -> List[str]:
-        return self._parsed['plugin-registry-files']
-
-    @staticmethod
-    def from_path(plugin_registry_catalog_path: Union[Path, str]) -> PluginRegistryCatalog:
-        plugin_registry_catalog_path = path(plugin_registry_catalog_path)
-        with IR.path(__resources__, PluginRegistryCatalog.PLUGIN_REGISTRY_CATALOG_SCHEMA) as plugin_registry_catalog_schema_path:
-            parsed = load_and_validate(plugin_registry_catalog_schema_path, plugin_registry_catalog_path)
-            return PluginRegistryCatalog(parsed)
+    def get_plugin_registry_files(self) -> List[Path]:
+        return [self._get_root().joinpath(pstr) for pstr in self.plugin_registry_files]
 
 
-class PluginRegistry(ABC):
-
-    PLUGIN_REGISTRY_SCHEMA = 'plugin-registry-schema.json'
-
-    def __init__(self, parsed: YamlT):
-        super().__init__()
-        self._parsed: YamlT = parsed
-
-    def get_id(self) -> str:
-        return self._parsed['id']
-
-    def get_layer(self, layer_id) -> Optional[PluginRegistryLayer]:
-        for layer in self.get_layers():
-            if layer.get_id() == layer_id:
-                return layer
-        return None
-
-    def get_layer_ids(self) -> List[str]:
-        return [layer.get_id() for layer in self.get_layers()]
-
-    def get_layers(self) -> List[PluginRegistryLayer]:
-        return [self._make_layer(layer_elem) for layer_elem in self._parsed['layers']]
-
-    def get_layout_type(self) -> str:
-        return self._parsed['layout']['type']
-
-    def get_name(self) -> str:
-        return self._parsed['name']
-
-    def get_plugin_identifiers(self) -> List[str]:
-        return self._parsed['plugin-identifiers']
-
-    def has_plugin(self, plugin_id) -> bool:
-        return plugin_id in self.get_plugin_identifiers()
-
-    @abstractmethod
-    def _make_layer(self, parsed: YamlT) -> PluginRegistryLayer:
-        pass
-
-    @staticmethod
-    def from_path(plugin_registry_file_path: Union[Path, str]) -> List[PluginRegistry]:
-        plugin_registry_file_path = path(plugin_registry_file_path)
-        with IR.path(__resources__, PluginRegistry.PLUGIN_REGISTRY_SCHEMA) as plugin_registry_schema_path:
-           lst = load_and_validate(plugin_registry_schema_path, plugin_registry_file_path, multiple=True)
-           return [PluginRegistry._from_obj(parsed, plugin_registry_file_path) for parsed in lst]
-
-    @staticmethod
-    def _from_obj(parsed: YamlT, plugin_registry_file_path: Path) -> PluginRegistry:
-        typ = parsed['layout']['type']
-        if typ == DirectoryPluginRegistry.LAYOUT:
-            return DirectoryPluginRegistry(parsed)
-        elif typ == RcsPluginRegistry.LAYOUT:
-            return RcsPluginRegistry(parsed)
-        else:
-            raise RuntimeError(f'{plugin_registry_file_path!s}: unknown layout type: {typ}')
+PluginRegistryLayoutType = Literal['directory', 'rcs']
 
 
-class PluginRegistryLayer(ABC):
-
-    PRODUCTION = 'production'
-
-    TESTING = 'testing'
-
-    def __init__(self, plugin_registry: PluginRegistry, parsed: YamlT):
-        super().__init__()
-        self._parsed: YamlT = parsed
-        self._plugin_registry: PluginRegistry = plugin_registry
-
-    @abstractmethod
-    def deploy_plugin(self, plugin_id: str, jar_path: Path, interactive: bool=False) -> Optional[Tuple[Path, Plugin]]:
-        pass
-
-    @abstractmethod
-    def get_file_for(self, plugin_id: str) -> Optional[Path]:
-        pass
-
-    def get_id(self) -> str:
-        return self._parsed['id']
-
-    @abstractmethod
-    def get_jars(self) -> List[Path]:
-        pass
-
-    def get_name(self) -> str:
-        return self._parsed['name']
-
-    def get_path(self) -> Path:
-        return path(self._parsed['path'])
-
-    def get_plugin_registry(self) -> PluginRegistry:
-        return self._plugin_registry
+PluginRegistryLayoutFileNamingConvention = Literal['abbreviated', 'identifier', 'underscore']
 
 
-class DirectoryPluginRegistry(PluginRegistry):
+class BasePluginRegistryLayout(BaseModel, ABC):
+    TYPE_FIELD: ClassVar[Dict[str, str]] = dict(title='Plugin Registry Layout Type', description='A plugin registry layout type')
+    FILE_NAMING_CONVENTION_DEFAULT: ClassVar[PluginRegistryLayoutFileNamingConvention] = 'identifier'
+    FILE_NAMING_CONVENTION_FIELD: ClassVar[Dict[str, str]] = dict(title='Plugin Registry Layout File Naming Convention', description='A file naming convention for the plugin registry layout', alias='file-naming-convention')
 
-    LAYOUT = 'directory'
+    _plugin_registry: Optional[PluginRegistry]
 
-    FILE_NAMING_CONVENTION_ABBREVIATED = 'abbreviated'
-
-    FILE_NAMING_CONVENTION_IDENTIFIER = 'identifier'
-
-    FILE_NAMING_CONVENTION_UNDERSCORE = 'underscore'
-
-    DEFAULT_FILE_NAMING_CONVENTION = FILE_NAMING_CONVENTION_IDENTIFIER
-
-    def __init__(self, parsed: YamlT) -> None:
-        super().__init__(parsed)
-
-    def _make_layer(self, parsed) -> PluginRegistryLayer:
-        return DirectoryPluginRegistryLayer(self, parsed)
-
-
-class DirectoryPluginRegistryLayer(PluginRegistryLayer):
-
-    def __init__(self, plugin_registry: PluginRegistry, parsed: YamlT):
-        super().__init__(plugin_registry, parsed)
-
-    def deploy_plugin(self, plugin_id: str, src_path: Path, interactive: bool=False) -> Optional[Tuple[Path, Plugin]]:
+    def deploy_plugin(self, plugin_id: str, layer: PluginRegistryLayer, src_path: Path, interactive: bool=False) -> Optional[Tuple[Path, Plugin]]:
         src_path = path(src_path)  # in case it's a string
-        dst_path = self._get_dstpath(plugin_id)
-        if not self._proceed_copy(src_path, dst_path, interactive=interactive):
+        dst_path = self._get_dstpath(plugin_id, layer)
+        if not self._proceed_copy(src_path, dst_path, layer, interactive=interactive):
             return None
         self._copy_jar(src_path, dst_path, interactive=interactive)
         return dst_path, Plugin.from_jar(src_path)
 
-    def get_file_for(self, plugin_id) -> Optional[Path]:
-        jar_path = self._get_dstpath(plugin_id)
+    def get_file_for(self, plugin_id, layer: PluginRegistryLayer) -> Optional[Path]:
+        jar_path = self._get_dstpath(plugin_id, layer)
         return jar_path if jar_path.is_file() else None
 
-    def get_file_naming_convention(self) -> str:
-        return self.get_plugin_registry()._parsed['layout'].get('file-naming-convention', DirectoryPluginRegistry.DEFAULT_FILE_NAMING_CONVENTION)
+    def get_file_naming_convention(self) -> PluginRegistryLayoutFileNamingConvention:
+        return getattr(self, 'file_naming_convention')
 
-    def get_jars(self) -> List[Path]:
-        return sorted(self.get_path().glob('*.jar'))
+    def get_plugin_registry(self) -> PluginRegistry:
+        if self._plugin_registry is None:
+            raise RuntimeError('Undefined plugin registry')
+        return self._plugin_registry
+
+    def get_type(self) -> PluginRegistryLayoutType:
+        return getattr(self, 'type')
+
+    def model_post_init(self, context: Any) -> None:
+        self._plugin_registry = None
+
+    @abstractmethod
+    def _copy_jar(self, src_path: Path, dst_path: Path, interactive: bool=False) -> None:
+        pass
+
+    def _get_dstfile(self, plugin_id: str) -> str:
+        if (conv := self.get_file_naming_convention()) == 'abbreviated':
+            return f'{plugin_id.split(".")[-1]}.jar'
+        elif conv == 'identifier':
+            return f'{plugin_id}.jar'
+        elif conv == 'underscore':
+            return f'{plugin_id.replace(".", "_")}.jar'
+        else:
+            raise InternalError()
+
+    def _get_dstpath(self, plugin_id: str, layer: PluginRegistryLayer) -> Path:
+        return layer.get_path().joinpath(self._get_dstfile(plugin_id))
+
+    def _initialize(self, plugin_registry: PluginRegistry) -> Self:
+        self._plugin_registry = plugin_registry
+        return self
+
+    def _proceed_copy(self, src_path: Path, dst_path: Path, layer: PluginRegistryLayer, interactive: bool=False) -> bool:
+        if not dst_path.exists():
+            if interactive:
+                i = input(f'{dst_path} does not exist in {self.get_plugin_registry().get_id()}:{layer.get_id()} ({layer.get_name()}); create it (y/n)? [n] ').lower() or 'n'
+                if i != 'y':
+                    return False
+        return True
+
+
+class DirectoryPluginRegistryLayout(BasePluginRegistryLayout):
+    type: Literal['directory'] = Field(**BasePluginRegistryLayout.TYPE_FIELD)
+    file_naming_convention: Optional[PluginRegistryLayoutFileNamingConvention] = Field(BasePluginRegistryLayout.FILE_NAMING_CONVENTION_DEFAULT, **BasePluginRegistryLayout.FILE_NAMING_CONVENTION_FIELD)
 
     def _copy_jar(self, src_path: Path, dst_path: Path, interactive: bool=False) -> None:
         basename = dst_path.name
@@ -206,44 +133,10 @@ class DirectoryPluginRegistryLayer(PluginRegistryLayer):
             cmd = ['chcon', '-t', 'httpd_sys_content_t', basename]
             subprocess.run(cmd, check=True, cwd=self.get_path())
 
-    def _get_dstpath(self, plugin_id: str) -> Path:
-        return self.get_path().joinpath(self._get_dstfile(plugin_id))
 
-    def _get_dstfile(self, plugin_id: str) -> str:
-        conv = self.get_file_naming_convention()
-        if conv == DirectoryPluginRegistry.FILE_NAMING_CONVENTION_IDENTIFIER:
-            return f'{plugin_id}.jar'
-        elif conv == DirectoryPluginRegistry.FILE_NAMING_CONVENTION_UNDERSCORE:
-            return f'{plugin_id.replace(".", "_")}.jar'
-        elif conv == DirectoryPluginRegistry.FILE_NAMING_CONVENTION_ABBREVIATED:
-            return f'{plugin_id.split(".")[-1]}.jar'
-        else:
-            raise RuntimeError(f'{self.get_plugin_registry().get_id()}: unknown file naming convention: {conv}')
-
-    def _proceed_copy(self, src_path: Path, dst_path: Path, interactive: bool=False) -> bool:
-        if not dst_path.exists():
-            if interactive:
-                i = input(f'{dst_path} does not exist in {self.get_plugin_registry().get_id()}:{self.get_id()} ({self.get_name()}); create it (y/n)? [n] ').lower() or 'n'
-                if i != 'y':
-                    return False
-        return True
-
-
-class RcsPluginRegistry(DirectoryPluginRegistry):
-
-    LAYOUT = 'rcs'
-
-    def __init__(self, parsed: YamlT) -> None:
-        super().__init__(parsed)
-
-    def _make_layer(self, parsed: YamlT) -> PluginRegistryLayer:
-        return RcsPluginRegistryLayer(self, parsed)
-
-
-class RcsPluginRegistryLayer(DirectoryPluginRegistryLayer):
-
-    def __init__(self, plugin_registry: PluginRegistry, parsed: YamlT) -> None:
-        super().__init__(plugin_registry, parsed)
+class RcsPluginRegistryLayout(DirectoryPluginRegistryLayout):
+    type: Literal['rcs'] = Field(**BasePluginRegistryLayout.TYPE_FIELD)
+    file_naming_convention: Optional[PluginRegistryLayoutFileNamingConvention] = Field(BasePluginRegistryLayout.FILE_NAMING_CONVENTION_DEFAULT, **BasePluginRegistryLayout.FILE_NAMING_CONVENTION_FIELD)
 
     def _copy_jar(self, src_path: Path, dst_path: Path, interactive: bool=False) -> None:
         basename = dst_path.name
@@ -261,3 +154,76 @@ class RcsPluginRegistryLayer(DirectoryPluginRegistryLayer):
             cmd.append(f'-t-{plugin.get_name()}')
         cmd.append(basename)
         subprocess.run(cmd, check=True, cwd=self.get_path())
+
+
+PluginRegistryLayout = Annotated[Union[DirectoryPluginRegistryLayout, RcsPluginRegistryLayout], Field(discriminator='type')]
+
+
+PluginRegistryLayerIdentifier = str
+
+
+class PluginRegistryLayer(BaseModel, ABC):
+    PRODUCTION: ClassVar[str] = 'production'
+    TESTING: ClassVar[str] = 'testing'
+
+    id: PluginRegistryLayerIdentifier = Field(title='Plugin Registry Layer Identifier', description='An identifier for the plugin registry layer')
+    name: str = Field(title='Plugin Registry Layer Name', description='A name for the plugin registry layer')
+    path: str = Field(title='Plugin Registry Layer Path', description='A root path for the plugin registry layer')
+
+    def get_id(self) -> PluginRegistryLayerIdentifier:
+        return self.id
+
+    def get_jars(self) -> List[Path]:
+        return sorted(self.get_path().glob('*.jar'))
+
+    def get_name(self) -> str:
+        return self.name
+
+    def get_path(self) -> Path:
+        return path(self.path)
+
+
+PluginRegistryIdentifier = str
+
+
+class PluginRegistry(BaseModel):
+    kind: Literal['PluginRegistry'] = Field(description="This object's kind")
+    id: PluginRegistryIdentifier = Field(title='Plugin Registry Identifier', description='An identifier for the plugin set')
+    name: str = Field(title='Plugin Registry Name', description='A name for the plugin set')
+    layout: PluginRegistryLayout = Field(title='Plugin Registry Layout', description='A layout for the plugin registry')
+    layers: List[PluginRegistryLayer] = Field(min_length=1, title='Plugin Registry Layers', description="A non-empty list of plugin registry layers", alias='plugin-registry-layers')
+    plugin_identifiers: List[str] = Field(min_length=1, title='Plugin Identifiers', description="A non-empty list of plugin identifiers", alias='plugin-identifiers')
+    suppressed_plugin_identifiers: List[str] = Field([], title='Suppressed Plugin Identifiers', description="A list of suppressed plugin identifiers", alias='suppressed-plugin-identifiers')
+
+    def get_id(self) -> PluginRegistryIdentifier:
+        return self.id
+
+    def get_layer(self, layer_id: PluginRegistryLayerIdentifier) -> Optional[PluginRegistryLayer]:
+        for layer in self.get_layers():
+            if layer.get_id() == layer_id:
+                return layer
+        return None
+
+    def get_layer_ids(self) -> List[PluginRegistryLayerIdentifier]:
+        return [layer.get_id() for layer in self.get_layers()]
+
+    def get_layers(self) -> List[PluginRegistryLayer]:
+        return self.layers
+
+    def get_layout(self) -> BasePluginRegistryLayout:
+        return self.layout
+
+    def get_name(self) -> str:
+        return self.name
+
+    def get_plugin_identifiers(self) -> List[str]:
+        return self.plugin_identifiers
+
+    def get_suppressed_plugin_identifiers(self) -> List[str]:
+        return self.suppressed_plugin_identifiers
+
+    def has_plugin(self, plugin_id: str) -> bool:
+        return plugin_id in self.get_plugin_identifiers()
+
+    def model_post_init(self, context: Any) -> None:
+        self.get_layout()._initialize(self)

@@ -45,7 +45,7 @@ dependencies = [
     "lockss-pybasic (>=0.1.0,<0.2.0)",
     "pyyaml (>=6.0.0,<6.1.0)",
     "xdg (>=6.0.0,<6.1.0)",
-    "pydantic (>=2.11.7,<3.0.0)",
+    "pydantic (>=2.11.0,<3.0.0)",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -74,7 +74,8 @@ include = [
     "README.rst",
 ]
 packages = [
-    { include = "lockss", from = "src" }
+    { include = "lockss", from = "src" },
+    { include = "lockss", from = "tests" },
 ]
 
 [tool.poetry.scripts]

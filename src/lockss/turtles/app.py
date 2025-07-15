@@ -28,12 +28,18 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+# Remove in Python 3.14
+# See https://stackoverflow.com/questions/33533148/how-do-i-type-hint-a-method-with-the-type-of-the-enclosing-class/33533514#33533514
+from __future__ import annotations
+
 from collections.abc import Callable
 import importlib.resources as IR
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
+import yaml
 from lockss.pybasic.fileutil import path
+from pydantic import BaseModel, Field
 import xdg
 
 from . import resources as __resources__
@@ -41,6 +47,18 @@ from .plugin import Plugin
 from .plugin_registry import PluginRegistry, PluginRegistryCatalog
 from .plugin_set import PluginSet, PluginSetCatalog
 from .util import YamlT, load_and_validate
+
+
+class PluginSigningCredentials(BaseModel):
+    kind: Literal['PluginSigningCredentials'] = Field(description="This object's kind")
+    plugin_signing_keystore: str = Field(title='Plugin Signing Keystore', description='A path to the plugin signing keystore')
+    plugin_signing_alias: str = Field(title='Plugin Signing Alias', description='The plugin signing alias to use')
+
+    def get_plugin_signing_alias(self) -> str:
+        return self.plugin_signing_alias
+
+    def get_plugin_signing_keystore(self) -> Path:
+        return path(self.plugin_signing_keystore)
 
 
 class TurtlesApp(object):
@@ -68,7 +86,7 @@ class TurtlesApp(object):
         self._password: Optional[Callable[[], str]] = None
         self._plugin_registries: Optional[List[PluginRegistry]] = None
         self._plugin_sets: Optional[List[PluginSet]] = None
-        self._plugin_signing_credentials: YamlT = None
+        self._plugin_signing_credentials: Optional[PluginSigningCredentials] = None
 
     def build_plugin(self, plugin_ids: List[str]) -> Dict[str, Tuple[str, Path, Plugin]]:
         return {plugin_id: self._build_one_plugin(plugin_id) for plugin_id in plugin_ids}
@@ -82,23 +100,29 @@ class TurtlesApp(object):
 
     def load_plugin_registries(self, plugin_registry_catalog_path: Optional[Union[Path, str]]=None) -> None:
         if self._plugin_registries is None:
-            plugin_registry_catalog = PluginRegistryCatalog.from_path(self.select_plugin_registry_catalog(plugin_registry_catalog_path))
+            with self.select_plugin_registry_catalog(plugin_registry_catalog_path).open('r') as fprc:
+                plugin_registry_catalog = PluginRegistryCatalog(**yaml.safe_load(fprc))._initialize(plugin_registry_catalog_path)
             self._plugin_registries = list()
             for plugin_registry_file in plugin_registry_catalog.get_plugin_registry_files():
-                self._plugin_registries.extend(PluginRegistry.from_path(plugin_registry_file))
+                with plugin_registry_file.open('r') as fpr:
+                    for pr in yaml.safe_load_all(fpr):
+                        self._plugin_registries.append(PluginRegistry(**pr))
 
     def load_plugin_sets(self, plugin_set_catalog_path: Optional[Union[Path, str]]=None) -> None:
+        plugin_set_catalog_path = path(plugin_set_catalog_path)
         if self._plugin_sets is None:
-            plugin_set_catalog = PluginSetCatalog.from_path(self.select_plugin_set_catalog(plugin_set_catalog_path))
+            with self.select_plugin_set_catalog(plugin_set_catalog_path) as fpsc:
+                plugin_set_catalog = PluginSetCatalog(**yaml.safe_load(fpsc))._initialize(plugin_set_catalog_path)
             self._plugin_sets = list()
             for plugin_set_file in plugin_set_catalog.get_plugin_set_files():
-                self._plugin_sets.extend(PluginSet.from_path(plugin_set_file))
+                with plugin_set_file.open('r') as fps:
+                    for ps in yaml.safe_load_all(fps):
+                        self._plugin_sets.append(PluginSet(**ps)._initialize(plugin_set_file))
 
     def load_plugin_signing_credentials(self, plugin_signing_credentials_path: Optional[Union[Path, str]]=None) -> None:
         if self._plugin_signing_credentials is None:
-            plugin_signing_credentials_path = path(plugin_signing_credentials_path) if plugin_signing_credentials_path else self._select_file(TurtlesApp.PLUGIN_SIGNING_CREDENTIALS)
-            with IR.path(__resources__, TurtlesApp.PLUGIN_SIGNING_CREDENTIALS_SCHEMA) as plugin_signing_credentials_schema_path:
-                self._plugin_signing_credentials = load_and_validate(plugin_signing_credentials_schema_path, plugin_signing_credentials_path)
+            with self.select_plugin_signing_credentials(plugin_signing_credentials_path).open('r') as fpsc:
+                self._plugin_signing_credentials = PluginSigningCredentials(**yaml.safe_load(fpsc))
 
     def release_plugin(self, plugin_ids: List[str], layer_ids: List[str], interactive: bool=False) -> Dict[str, List[Tuple[str, str, Path, Plugin]]]:
         # ... plugin_id -> (set_id, jar_path, plugin)
@@ -154,10 +178,10 @@ class TurtlesApp(object):
         return self._password() if self._password else None
 
     def _get_plugin_signing_alias(self) -> str:
-        return self._plugin_signing_credentials['plugin-signing-alias']
+        return self._plugin_signing_credentials.get_plugin_signing_alias()
 
-    def _get_plugin_signing_keystore(self) -> str:
-        return self._plugin_signing_credentials['plugin-signing-keystore']
+    def _get_plugin_signing_keystore(self) -> Path:
+        return self._plugin_signing_credentials.get_plugin_signing_keystore()
 
     def _get_plugin_signing_password(self) -> str:
         return self._get_password()

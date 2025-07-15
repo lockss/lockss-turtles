@@ -28,24 +28,38 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from pathlib import Path
-from typing import Any, Optional, Self, Union
+from collections.abc import Callable
+from pydantic import ValidationError
+from pydantic_core import ErrorDetails
+from typing import Any, Dict, Optional, Tuple, Union
+from unittest import TestCase
 
-from lockss.pybasic.fileutil import path
-from pydantic import BaseModel
+
+Loc = Union[Tuple[str], str]
 
 
-class BaseModelWithRoot(BaseModel):
-    _root: Optional[Path]
+class PydanticTestCase(TestCase):
 
-    def model_post_init(self, context: Any) -> None:
-        self._root = None
+    def _assertPydanticValidationError(self,
+                                       func: Callable[[], Any],
+                                       matcher: Callable[[ErrorDetails], bool],
+                                       msg: Optional[str]=None):
+        with self.assertRaises(ValidationError) as cm:
+            func()
+            self.fail('Expected ValidationError but did not get one')
+        self.assertIsInstance(cm.exception, ValidationError)
+        ve: ValidationError = cm.exception
+        for e in ve.errors():
+            if matcher(e):
+                return
+        self.fail(msg or f'Did not get a matching ValidationError; got:\n{"\n".join([str(e) for e in ve.errors()])}\n{ve!s}')
 
-    def _get_root(self) -> Path:
-        if self._root is None:
-            raise RuntimeError('Undefined root')
-        return self._root
+    def assertPydanticMissing(self, func: Callable[[], Any], loc: Loc, msg=None) -> None:
+        if isinstance(loc, str):
+            loc = (loc,)
+        self._assertPydanticValidationError(func, lambda e: e.get('type') == 'missing' and e.get('loc') == loc)
 
-    def _initialize(self, root: Union[Path, str]) -> Self:
-        self._root = path(root)
-        return self
+    def assertPydanticLiteralError(self, func: Callable[[], Any], loc: Loc, expected: str, msg=None) -> None:
+        if isinstance(loc, str):
+            loc = (loc,)
+        self._assertPydanticValidationError(func, lambda e: e.get('type') == 'literal_error' and e.get('loc') == loc and (ctx := e.get('ctx')) and ctx.get('expected') == repr(expected))
