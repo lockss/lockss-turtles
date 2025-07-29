@@ -38,21 +38,22 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
-from typing import Annotated, Any, ClassVar, Dict, List, Literal, Optional, Self, Tuple, Union
+from typing import Annotated, Any, ClassVar, Literal, Optional, Union
 
-import yaml
-from lockss.pybasic.fileutil import path
 from pydantic import BaseModel, Field
 
-from .plugin import Plugin
+from .plugin import Plugin, PluginIdentifier
 from .util import BaseModelWithRoot
 
 
-class PluginSetCatalog(BaseModelWithRoot):
-    kind: Literal['PluginSetCatalog'] = Field(description="This object's kind")
-    plugin_set_files: List[str] = Field(min_length=1, description="A non-empty list of plugin set files", title='Plugin Set Files', alias='plugin-set-files')
+PluginSetCatalogKind = Literal['PluginSetCatalog']
 
-    def get_plugin_set_files(self) -> List[Path]:
+
+class PluginSetCatalog(BaseModelWithRoot):
+    kind: PluginSetCatalogKind = Field(description="This object's kind")
+    plugin_set_files: list[str] = Field(min_length=1, description="A non-empty list of plugin set files", title='Plugin Set Files', alias='plugin-set-files')
+
+    def get_plugin_set_files(self) -> list[Path]:
         return [self._get_root().joinpath(p) for p in self.plugin_set_files]
 
 
@@ -60,12 +61,12 @@ PluginSetBuilderType = Literal['ant', 'maven']
 
 
 class BasePluginSetBuilder(BaseModelWithRoot, ABC):
-    TYPE_FIELD: ClassVar[Dict[str, str]] = dict(description='A plugin builder type', title='Plugin Builder Type')
-    MAIN_FIELD: ClassVar[Dict[str, str]] = dict(description="The path to the plugins' source code, relative to the root of the project", title='Main Code Path')
-    TEST_FIELD: ClassVar[Dict[str, str]] = dict(description="The path to the plugins' unit tests, relative to the root of the project", title='Test Code Path')
+    TYPE_FIELD: ClassVar[dict[str, str]] = dict(description='A plugin builder type', title='Plugin Builder Type')
+    MAIN_FIELD: ClassVar[dict[str, str]] = dict(description="The path to the plugins' source code, relative to the root of the project", title='Main Code Path')
+    TEST_FIELD: ClassVar[dict[str, str]] = dict(description="The path to the plugins' unit tests, relative to the root of the project", title='Test Code Path')
 
     @abstractmethod
-    def build_plugin(self, plugin_id: str, keystore_path: Path, keystore_alias: str, keystore_password=None) -> Tuple[Path, Plugin]:
+    def build_plugin(self, plugin_id: PluginIdentifier, keystore_path: Path, keystore_alias: str, keystore_password=None) -> tuple[Path, Plugin]:
         pass
 
     def get_main(self) -> Path:
@@ -77,10 +78,10 @@ class BasePluginSetBuilder(BaseModelWithRoot, ABC):
     def get_type(self) -> PluginSetBuilderType:
         return getattr(self, 'type')
 
-    def has_plugin(self, plugin_id: str) -> bool:
+    def has_plugin(self, plugin_id: PluginIdentifier) -> bool:
         return self._plugin_path(plugin_id).is_file()
 
-    def make_plugin(self, plugin_id: str) -> Plugin:
+    def make_plugin(self, plugin_id: PluginIdentifier) -> Plugin:
         return Plugin.from_path(self._plugin_path(plugin_id))
 
     def _get_main(self) -> str:
@@ -89,7 +90,7 @@ class BasePluginSetBuilder(BaseModelWithRoot, ABC):
     def _get_test(self) -> str:
         return getattr(self, 'test')
 
-    def _plugin_path(self, plugin_id: str) -> Path:
+    def _plugin_path(self, plugin_id: PluginIdentifier) -> Path:
         return self.get_main_path().joinpath(Plugin.id_to_file(plugin_id))
 
 
@@ -103,7 +104,7 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
 
     _built: bool
 
-    def build_plugin(self, plugin_id: str, keystore_path: Path, keystore_alias: str, keystore_password=None) -> Tuple[Path, Plugin]:
+    def build_plugin(self, plugin_id: PluginIdentifier, keystore_path: Path, keystore_alias: str, keystore_password=None) -> tuple[Path, Plugin]:
         # Prerequisites
         if 'JAVA_HOME' not in os.environ:
             raise Exception('error: JAVA_HOME must be set in your environment')
@@ -123,7 +124,7 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
                            shell=True, cwd=self._get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             self._built = True
 
-    def _little_build(self, plugin_id: str, keystore_path: Path, keystore_alias: str, keystore_password: str=None) -> Tuple[Path, Plugin]:
+    def _little_build(self, plugin_id: PluginIdentifier, keystore_path: Path, keystore_alias: str, keystore_password: str=None) -> tuple[Path, Plugin]:
         orig_plugin = None
         cur_id = plugin_id
         # Get all directories for jarplugin -d
@@ -164,7 +165,7 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
             raise FileNotFoundError(str(jar_path))
         return jar_path, orig_plugin
 
-    def _plugin_path(self, plugin_id: str) -> Path:
+    def _plugin_path(self, plugin_id: PluginIdentifier) -> Path:
         return self.get_main_path().joinpath(Plugin.id_to_file(plugin_id))
 
     def _sanitize(self, called_process_error: subprocess.CalledProcessError) -> subprocess.CalledProcessError:
@@ -186,7 +187,7 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
 
     _built: bool
 
-    def build_plugin(self, plugin_id: str, keystore_path: Path, keystore_alias: str, keystore_password=None) -> Tuple[Path, Plugin]:
+    def build_plugin(self, plugin_id: PluginIdentifier, keystore_path: Path, keystore_alias: str, keystore_password=None) -> tuple[Path, Plugin]:
         self._big_build(keystore_path, keystore_alias, keystore_password=keystore_password)
         return self._little_build(plugin_id)
 
@@ -207,7 +208,7 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
                 raise self._sanitize(cpe)
             self._built = True
 
-    def _little_build(self, plugin_id: str) -> Tuple[Path, Plugin]:
+    def _little_build(self, plugin_id: PluginIdentifier) -> tuple[Path, Plugin]:
         jar_path = self._get_root().joinpath('target', 'pluginjars', f'{plugin_id}.jar')
         if not jar_path.is_file():
             raise Exception(f'{plugin_id}: built JAR not found: {jar_path!s}')
@@ -225,16 +226,19 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
 PluginSetBuilder = Annotated[Union[AntPluginSetBuilder, MavenPluginSetBuilder], Field(discriminator='type')]
 
 
+PluginSetKind = Literal['PluginSet']
+
+
 PluginSetIdentifier = str
 
 
 class PluginSet(BaseModel):
-    kind: Literal['PluginSet'] = Field(description="This object's kind")
+    kind: PluginSetKind = Field(description="This object's kind")
     id: PluginSetIdentifier = Field(description='An identifier for the plugin set')
     name: str = Field(description='A name for the plugin set')
     builder: PluginSetBuilder = Field(description='A builder for the plugin set', title='Plugin Set Builder')
 
-    def build_plugin(self, plugin_id: str, keystore_path: Path, keystore_alias: str, keystore_password=None) -> Tuple[Path, Plugin]:
+    def build_plugin(self, plugin_id: PluginIdentifier, keystore_path: Path, keystore_alias: str, keystore_password=None) -> tuple[Path, Plugin]:
         return self.builder.build_plugin(plugin_id, keystore_path, keystore_alias, keystore_password)
 
     def get_builder(self) -> PluginSetBuilder:
@@ -246,12 +250,12 @@ class PluginSet(BaseModel):
     def get_name(self) -> str:
         return self.name
 
-    def has_plugin(self, plugin_id: str) -> bool:
+    def has_plugin(self, plugin_id: PluginIdentifier) -> bool:
         return self.get_builder().has_plugin(plugin_id)
 
-    def make_plugin(self, plugin_id: str) -> Plugin:
+    def make_plugin(self, plugin_id: PluginIdentifier) -> Plugin:
         return self.get_builder().make_plugin(plugin_id)
 
-    def _initialize(self, root: Path) -> Self:
+    def _initialize(self, root: Path) -> PluginSet:
         self.get_builder()._initialize(root)
         return self

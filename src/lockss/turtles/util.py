@@ -28,11 +28,20 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+# Remove in Python 3.14
+# See https://stackoverflow.com/questions/33533148/how-do-i-type-hint-a-method-with-the-type-of-the-enclosing-class/33533514#33533514
+from __future__ import annotations
+
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Optional, Self, Union
+from typing import Any, Optional, Union
 
 from lockss.pybasic.fileutil import path
 from pydantic import BaseModel
+
+
+# Candidate for lockss-pybasic
+PathOrStr = Union[Path, str]
 
 
 class BaseModelWithRoot(BaseModel):
@@ -41,11 +50,15 @@ class BaseModelWithRoot(BaseModel):
     def model_post_init(self, context: Any) -> None:
         self._root = None
 
-    def _get_root(self) -> Path:
+    def get_root(self) -> Path:
         if self._root is None:
-            raise RuntimeError('Undefined root')
+            raise RuntimeError('Uninitialized root')
         return self._root
 
-    def _initialize(self, root: Union[Path, str]) -> Self:
+    def initialize(self, root: PathOrStr) -> BaseModelWithRoot:
         self._root = path(root)
         return self
+
+
+def file_or(paths: Iterable[Path]) -> str:
+    return ' or '.join(map(str, paths))

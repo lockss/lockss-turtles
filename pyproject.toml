@@ -41,7 +41,6 @@ maintainers = [
 ]
 dependencies = [
     "java-manifest (>=1.1.0,<1.2.0)",
-    "jsonschema (>=4.24.0,<4.25.0)",
     "lockss-pybasic (>=0.1.0,<0.2.0)",
     "pyyaml (>=6.0.0,<6.1.0)",
     "xdg (>=6.0.0,<6.1.0)",
@@ -75,7 +74,7 @@ include = [
 ]
 packages = [
     { include = "lockss", from = "src" },
-    { include = "lockss", from = "tests" },
+    { include = "unittest", from = "tests" },
 ]
 
 [tool.poetry.scripts]

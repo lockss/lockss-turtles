@@ -35,21 +35,25 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 import subprocess
-from typing import Annotated, Any, ClassVar, Dict, List, Literal, Optional, Self, Tuple, Union
+from typing import Annotated, Any, ClassVar, Literal, Optional, Union
 
 from lockss.pybasic.errorutil import InternalError
 from lockss.pybasic.fileutil import path
 from pydantic import BaseModel, Field
 
-from .plugin import Plugin
+from .plugin import Plugin, PluginIdentifier
 from .util import BaseModelWithRoot
 
 
-class PluginRegistryCatalog(BaseModelWithRoot):
-    kind: Literal['PluginRegistryCatalog'] = Field(description="This object's kind")
-    plugin_registry_files: List[str] = Field(min_length=1, description="A non-empty list of plugin registry files", title='Plugin Registry Files', alias='plugin-registry-files')
 
-    def get_plugin_registry_files(self) -> List[Path]:
+PluginRegistryCatalogKind = Literal['PluginRegistryCatalog']
+
+
+class PluginRegistryCatalog(BaseModelWithRoot):
+    kind: PluginRegistryCatalogKind = Field(description="This object's kind")
+    plugin_registry_files: list[str] = Field(min_length=1, description="A non-empty list of plugin registry files", title='Plugin Registry Files', alias='plugin-registry-files')
+
+    def get_plugin_registry_files(self) -> list[Path]:
         return [self._get_root().joinpath(pstr) for pstr in self.plugin_registry_files]
 
 
@@ -60,13 +64,13 @@ PluginRegistryLayoutFileNamingConvention = Literal['abbreviated', 'identifier', 
 
 
 class BasePluginRegistryLayout(BaseModel, ABC):
-    TYPE_FIELD: ClassVar[Dict[str, str]] = dict(title='Plugin Registry Layout Type', description='A plugin registry layout type')
+    TYPE_FIELD: ClassVar[dict[str, str]] = dict(title='Plugin Registry Layout Type', description='A plugin registry layout type')
     FILE_NAMING_CONVENTION_DEFAULT: ClassVar[PluginRegistryLayoutFileNamingConvention] = 'identifier'
-    FILE_NAMING_CONVENTION_FIELD: ClassVar[Dict[str, str]] = dict(title='Plugin Registry Layout File Naming Convention', description='A file naming convention for the plugin registry layout', alias='file-naming-convention')
+    FILE_NAMING_CONVENTION_FIELD: ClassVar[dict[str, str]] = dict(title='Plugin Registry Layout File Naming Convention', description='A file naming convention for the plugin registry layout', alias='file-naming-convention')
 
     _plugin_registry: Optional[PluginRegistry]
 
-    def deploy_plugin(self, plugin_id: str, layer: PluginRegistryLayer, src_path: Path, interactive: bool=False) -> Optional[Tuple[Path, Plugin]]:
+    def deploy_plugin(self, plugin_id: PluginIdentifier, layer: PluginRegistryLayer, src_path: Path, interactive: bool=False) -> Optional[tuple[Path, Plugin]]:
         src_path = path(src_path)  # in case it's a string
         dst_path = self._get_dstpath(plugin_id, layer)
         if not self._proceed_copy(src_path, dst_path, layer, interactive=interactive):
@@ -83,20 +87,25 @@ class BasePluginRegistryLayout(BaseModel, ABC):
 
     def get_plugin_registry(self) -> PluginRegistry:
         if self._plugin_registry is None:
-            raise RuntimeError('Undefined plugin registry')
+            raise RuntimeError('Uninitialized plugin registry')
         return self._plugin_registry
 
     def get_type(self) -> PluginRegistryLayoutType:
         return getattr(self, 'type')
 
+    def initialize(self, plugin_registry: PluginRegistry) -> BasePluginRegistryLayout:
+        self._plugin_registry = plugin_registry
+        return self
+
     def model_post_init(self, context: Any) -> None:
+        super().model_post_init(context)
         self._plugin_registry = None
 
     @abstractmethod
     def _copy_jar(self, src_path: Path, dst_path: Path, interactive: bool=False) -> None:
         pass
 
-    def _get_dstfile(self, plugin_id: str) -> str:
+    def _get_dstfile(self, plugin_id: PluginIdentifier) -> str:
         if (conv := self.get_file_naming_convention()) == 'abbreviated':
             return f'{plugin_id.split(".")[-1]}.jar'
         elif conv == 'identifier':
@@ -106,12 +115,8 @@ class BasePluginRegistryLayout(BaseModel, ABC):
         else:
             raise InternalError()
 
-    def _get_dstpath(self, plugin_id: str, layer: PluginRegistryLayer) -> Path:
+    def _get_dstpath(self, plugin_id: PluginIdentifier, layer: PluginRegistryLayer) -> Path:
         return layer.get_path().joinpath(self._get_dstfile(plugin_id))
-
-    def _initialize(self, plugin_registry: PluginRegistry) -> Self:
-        self._plugin_registry = plugin_registry
-        return self
 
     def _proceed_copy(self, src_path: Path, dst_path: Path, layer: PluginRegistryLayer, interactive: bool=False) -> bool:
         if not dst_path.exists():
@@ -173,7 +178,7 @@ class PluginRegistryLayer(BaseModel, ABC):
     def get_id(self) -> PluginRegistryLayerIdentifier:
         return self.id
 
-    def get_jars(self) -> List[Path]:
+    def get_jars(self) -> list[Path]:
         return sorted(self.get_path().glob('*.jar'))
 
     def get_name(self) -> str:
@@ -183,17 +188,20 @@ class PluginRegistryLayer(BaseModel, ABC):
         return path(self.path)
 
 
+PluginRegistryKind = Literal['PluginRegistry']
+
+
 PluginRegistryIdentifier = str
 
 
-class PluginRegistry(BaseModel):
-    kind: Literal['PluginRegistry'] = Field(description="This object's kind")
+class PluginRegistry(BaseModelWithRoot):
+    kind: PluginRegistryKind = Field(description="This object's kind")
     id: PluginRegistryIdentifier = Field(title='Plugin Registry Identifier', description='An identifier for the plugin set')
     name: str = Field(title='Plugin Registry Name', description='A name for the plugin set')
     layout: PluginRegistryLayout = Field(title='Plugin Registry Layout', description='A layout for the plugin registry')
-    layers: List[PluginRegistryLayer] = Field(min_length=1, title='Plugin Registry Layers', description="A non-empty list of plugin registry layers", alias='plugin-registry-layers')
-    plugin_identifiers: List[str] = Field(min_length=1, title='Plugin Identifiers', description="A non-empty list of plugin identifiers", alias='plugin-identifiers')
-    suppressed_plugin_identifiers: List[str] = Field([], title='Suppressed Plugin Identifiers', description="A list of suppressed plugin identifiers", alias='suppressed-plugin-identifiers')
+    layers: list[PluginRegistryLayer] = Field(min_length=1, title='Plugin Registry Layers', description="A non-empty list of plugin registry layers", alias='plugin-registry-layers')
+    plugin_identifiers: list[PluginIdentifier] = Field(min_length=1, title='Plugin Identifiers', description="A non-empty list of plugin identifiers", alias='plugin-identifiers')
+    suppressed_plugin_identifiers: list[PluginIdentifier] = Field([], title='Suppressed Plugin Identifiers', description="A list of suppressed plugin identifiers", alias='suppressed-plugin-identifiers')
 
     def get_id(self) -> PluginRegistryIdentifier:
         return self.id
@@ -204,10 +212,10 @@ class PluginRegistry(BaseModel):
                 return layer
         return None
 
-    def get_layer_ids(self) -> List[PluginRegistryLayerIdentifier]:
+    def get_layer_ids(self) -> list[PluginRegistryLayerIdentifier]:
         return [layer.get_id() for layer in self.get_layers()]
 
-    def get_layers(self) -> List[PluginRegistryLayer]:
+    def get_layers(self) -> list[PluginRegistryLayer]:
         return self.layers
 
     def get_layout(self) -> BasePluginRegistryLayout:
@@ -216,14 +224,15 @@ class PluginRegistry(BaseModel):
     def get_name(self) -> str:
         return self.name
 
-    def get_plugin_identifiers(self) -> List[str]:
+    def get_plugin_identifiers(self) -> list[PluginIdentifier]:
         return self.plugin_identifiers
 
-    def get_suppressed_plugin_identifiers(self) -> List[str]:
+    def get_suppressed_plugin_identifiers(self) -> list[PluginIdentifier]:
         return self.suppressed_plugin_identifiers
 
-    def has_plugin(self, plugin_id: str) -> bool:
+    def has_plugin(self, plugin_id: PluginIdentifier) -> bool:
         return plugin_id in self.get_plugin_identifiers()
 
     def model_post_init(self, context: Any) -> None:
-        self.get_layout()._initialize(self)
+        super().model_post_init(context)
+        self.get_layout().initialize(self)

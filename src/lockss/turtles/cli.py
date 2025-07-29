@@ -41,73 +41,98 @@ from lockss.pybasic.outpututil import OutputFormatOptions
 from pydantic.v1 import BaseModel, Field, FilePath
 from pydantic.v1.class_validators import validator
 import tabulate
-from typing import List, Optional
+from typing import Optional
 
+from lockss.turtles.plugin_registry import PluginRegistryLayer
 from . import __copyright__, __license__, __version__
 from .app import TurtlesApp
+from .plugin_registry import PluginRegistryLayerIdentifier
+from .util import file_or
 
 
 class PluginBuildingOptions(BaseModel):
-    plugin_set_catalog: Optional[FilePath] = Field(aliases=['-s'], description=f'(plugin set catalog) load the plugin set catalog from the given file, or if none, from {" or ".join(map(str, TurtlesApp.default_plugin_set_catalogs()))}')
-    plugin_signing_credentials: Optional[FilePath] = Field(aliases=['-c'], description=f'(plugin signing credentials) load the plugin signing credentials from the given file, or if none, from {" or ".join(map(str, TurtlesApp.default_plugin_signing_credentials()))}')
+    plugin_set: Optional[list[FilePath]] = Field(aliases=['-s'], description=f'(plugin set) add one or more plugin sets to the loaded plugin sets')
+    plugin_set_catalog: Optional[list[FilePath]] = Field(aliases=['-S'], description=f'(plugin set) add one or more plugin set catalogs to the loaded plugin set catalogs; if no plugin set catalogs or plugin sets are specified, load {file_or(TurtlesApp.default_plugin_set_catalog_choices())}')
+    plugin_signing_credentials: Optional[FilePath] = Field(aliases=['-c'], description=f'(plugin signing credentials) load the plugin signing credentials from the given file, or if none, from {file_or(TurtlesApp.default_plugin_signing_credentials_choices())}')
     plugin_signing_password: Optional[str] = Field(description='(plugin signing credentials) set the plugin signing password, or if none, prompt interactively')
+
+    def get_plugin_sets(self) -> list[Path]:
+        return [path(p) for p in self.plugin_set or []]
+
+    def get_plugin_set_catalogs(self) -> list[Path]:
+        if self.plugin_set or self.plugin_set_catalog:
+            return [path(p) for p in self.plugin_set_catalog or []]
+        if single := TurtlesApp.select_default_plugin_set_catalog():
+            return [single]
+        raise FileNotFoundError(file_or(TurtlesApp.default_plugin_set_catalog_choices()))
 
 
 class PluginDeploymentOptions(BaseModel):
-    plugin_registry_catalog: Optional[FilePath] = Field(aliases=['-r'], description=f'(plugin registry catalog) load the plugin registry catalog from the given file, or if none, from {" or ".join(map(str, TurtlesApp.default_plugin_registry_catalogs()))}')
-    plugin_registry_layer: Optional[List[str]] = Field(aliases=['-l'], description='(plugin registry layers) add one or more plugin registry layers to the set of plugin registry layers to process')
-    plugin_registry_layers: Optional[List[FilePath]] = Field(aliases=['-L'], description='(plugin registry layers) add the plugin registry layers listed in one or more files to the set of plugin registry layers to process')
+    plugin_registry: Optional[list[FilePath]] = Field(aliases=['-r'], description=f'(plugin registry) add one or more plugin registries to the loaded plugin registries')
+    plugin_registry_catalog: Optional[list[FilePath]] = Field(aliases=['-R'], description=f'(plugin registry) add one or more plugin registry catalogs to the loaded plugin registry catalogs; if no plugin registry catalogs or plugin registries are specified, load {file_or(TurtlesApp.default_plugin_registry_catalog_choices())}')
+    plugin_registry_layer: Optional[list[str]] = Field(aliases=['-l'], description='(plugin registry layers) add one or more plugin registry layers to the set of plugin registry layers to process')
+    plugin_registry_layers: Optional[list[FilePath]] = Field(aliases=['-L'], description='(plugin registry layers) add the plugin registry layers listed in one or more files to the set of plugin registry layers to process')
     testing: Optional[bool] = Field(False, aliases=['-t'], description='(plugin registry layers) synonym for --plugin-registry-layer testing (i.e. add "testing" to the list of plugin registry layers to process)')
     production: Optional[bool] = Field(False, aliases=['-p'], description='(plugin registry layers) synonym for --plugin-registry-layer production (i.e. add "production" to the list of plugin registry layers to process)')
 
     @validator('plugin_registry_layers', each_item=True, pre=True)
-    def _expand_each_plugin_registry_layers_path(cls, v: Path):
+    def _expand_each_plugin_registry_layers_path(cls, v: Path) -> Path:
         return path(v)
 
-    def get_plugin_registry_layers(self):
-        ret = [*self.plugin_registry_layer[:], *[file_lines(file_path) for file_path in self.plugin_registry_layers]]
+    def get_plugin_registries(self) -> list[Path]:
+        return [path(p) for p in self.plugin_registry or []]
+
+    def get_plugin_registry_catalogs(self) -> list[Path]:
+        if self.plugin_registry or self.plugin_registry_catalog:
+            return [path(p) for p in self.plugin_registry_catalog or []]
+        if single := TurtlesApp.select_default_plugin_registry_catalog():
+            return [single]
+        raise FileNotFoundError(file_or(TurtlesApp.default_plugin_set_catalog_choices()))
+
+    def get_plugin_registry_layers(self) -> list[PluginRegistryLayerIdentifier]:
+        ret = [*(self.plugin_registry_layer or []), *[file_lines(file_path) for file_path in self.plugin_registry_layers or []]]
         for layer in reversed(['testing', 'production']):
             if getattr(self, layer, False):
                 ret.insert(0, layer)
-        if len(ret) == 0:
-            raise RuntimeError('empty list of plugin registry layers')
-        return ret
+        if ret:
+            return ret
+        raise ValueError('Empty list of plugin registry layers')
 
 
 class PluginIdentifierOptions(BaseModel):
     """
     The --identifier/-i and --identifiers/-I options.
     """
-    plugin_identifier: Optional[List[str]] = Field([], aliases=['-i'], description='(plugin identifiers) add one or more plugin identifiers to the set of plugin identifiers to process')
-    plugin_identifiers: Optional[List[FilePath]] = Field([], aliases=['-I'], description='(plugin identifiers) add the plugin identifiers listed in one or more files to the set of plugin identifiers to process')
+    plugin_identifier: Optional[list[str]] = Field(aliases=['-i'], description='(plugin identifiers) add one or more plugin identifiers to the set of plugin identifiers to process')
+    plugin_identifiers: Optional[list[FilePath]] = Field(aliases=['-I'], description='(plugin identifiers) add the plugin identifiers listed in one or more files to the set of plugin identifiers to process')
 
     @validator('plugin_identifiers', each_item=True, pre=True)
-    def _expand_each_plugin_identifiers_path(cls, v: Path):
+    def _expand_each_plugin_identifiers_path(cls, v: Path) -> Path:
         return path(v)
 
-    def get_plugin_identifiers(self) -> List[str]:
-        ret = [*self.plugin_identifier[:], *[file_lines(file_path) for file_path in self.plugin_identifiers]]
-        if len(ret) == 0:
-            raise RuntimeError('empty list of plugin identifiers')
-        return ret
+    def get_plugin_identifiers(self) -> list[str]:
+        ret = [*(self.plugin_identifier or []), *[file_lines(file_path) for file_path in self.plugin_identifiers or []]]
+        if ret:
+            return ret
+        raise ValueError('Empty list of plugin identifiers')
 
 
 class PluginJarOptions(BaseModel):
     """
     The --plugin-jar/-j and --plugin-jars/-J options.
     """
-    plugin_jar: Optional[List[FilePath]] = Field([], aliases=['-j'], description='(plugin JARs) add one or more plugin JARs to the set of plugin JARs to process')
-    plugin_jars: Optional[List[FilePath]] = Field([], aliases=['-J'], description='(plugin JARs) add the plugin JARs listed in one or more files to the set of plugin JARs to process')
+    plugin_jar: Optional[list[FilePath]] = Field(aliases=['-j'], description='(plugin JARs) add one or more plugin JARs to the set of plugin JARs to process')
+    plugin_jars: Optional[list[FilePath]] = Field(aliases=['-J'], description='(plugin JARs) add the plugin JARs listed in one or more files to the set of plugin JARs to process')
 
     @validator('plugin_jar', 'plugin_jars', each_item=True, pre=True)
-    def _expand_each_plugin_jars_path(cls, v: Path):
+    def _expand_each_plugin_jars_path(cls, v: Path) -> Path:
         return path(v)
 
     def get_plugin_jars(self):
-        ret = [*self.plugin_jar[:], *[file_lines(file_path) for file_path in self.plugin_jars]]
-        if len(ret) == 0:
-            raise RuntimeError('empty list of plugin JARs')
-        return ret
+        ret = [*(self.plugin_jar or []), *[file_lines(file_path) for file_path in self.plugin_jars or []]]
+        if len(ret):
+            return ret
+        raise ValueError('Empty list of plugin JARs')
 
 
 class NonInteractiveOptions(BaseModel):
@@ -208,6 +233,10 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
         return self._build_plugin(build_plugin_command)
 
     def _build_plugin(self, build_plugin_command: BuildPluginCommand) -> None:
+        for psc in build_plugin_command.get_plugin_set_catalogs():
+            self._app.load_plugin_set_catalogs(psc)
+        for ps in build_plugin_command.get_plugin_sets():
+            self._app.load_plugin_sets(ps)
         # Prerequisites
         self._app.load_plugin_sets(build_plugin_command.plugin_set_catalog)
         self._app.load_plugin_signing_credentials(build_plugin_command.plugin_signing_credentials)

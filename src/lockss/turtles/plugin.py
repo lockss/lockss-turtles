@@ -38,12 +38,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, Optional
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 
-import java_manifest as JM
+import java_manifest
 from lockss.pybasic.fileutil import path
+
+from .util import PathOrStr
 
 
 PluginIdentifier = str
@@ -59,7 +61,7 @@ class Plugin(object):
         if tag != 'map':
             raise RuntimeError(f'{plugin_path!s}: invalid root element: {tag}')
 
-    def get_aux_packages(self) -> List[str]:
+    def get_aux_packages(self) -> list[str]:
         key = 'plugin_aux_packages'
         lst = [x[1] for x in self._parsed.findall('entry') if x[0].tag == 'string' and x[0].text == key]
         if lst is None or len(lst) < 1:
@@ -92,7 +94,7 @@ class Plugin(object):
         return result(lst[0])
 
     @staticmethod
-    def from_jar(jar_path: Union[Path, str]) -> Plugin:
+    def from_jar(jar_path: PathOrStr) -> Plugin:
         jar_path = path(jar_path)  # in case it's a string
         plugin_id = Plugin.id_from_jar(jar_path)
         plugin_fstr = str(Plugin.id_to_file(plugin_id))
@@ -101,7 +103,7 @@ class Plugin(object):
                 return Plugin(plugin_file, plugin_fstr)
 
     @staticmethod
-    def from_path(fpath: Union[Path, str]) -> Plugin:
+    def from_path(fpath: PathOrStr) -> Plugin:
         fpath = path(fpath)  # in case it's a string
         with open(fpath, 'r') as input_file:
             return Plugin(input_file, fpath)
@@ -111,9 +113,9 @@ class Plugin(object):
         return plugin_fstr.replace('/', '.')[:-4]  # 4 is len('.xml')
 
     @staticmethod
-    def id_from_jar(jar_path: Union[Path, str]) -> PluginIdentifier:
+    def id_from_jar(jar_path: PathOrStr) -> PluginIdentifier:
         jar_path = path(jar_path)  # in case it's a string
-        manifest = JM.from_jar(jar_path)
+        manifest = java_manifest.from_jar(jar_path)
         for entry in manifest:
             if entry.get('Lockss-Plugin') == 'true':
                 name = entry.get('Name')
@@ -124,9 +126,9 @@ class Plugin(object):
             raise Exception(f'{jar_path!s}: no Lockss-Plugin entry in META-INF/MANIFEST.MF')
 
     @staticmethod
-    def id_to_dir(plugin_id: str) -> Path:
+    def id_to_dir(plugin_id: PluginIdentifier) -> Path:
         return Plugin.id_to_file(plugin_id).parent
 
     @staticmethod
-    def id_to_file(plugin_id: str) -> Path:
+    def id_to_file(plugin_id: PluginIdentifier) -> Path:
         return Path(f'{plugin_id.replace(".", "/")}.xml')
