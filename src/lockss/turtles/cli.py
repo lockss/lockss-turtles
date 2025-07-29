@@ -51,8 +51,8 @@ from .util import file_or
 
 
 class PluginBuildingOptions(BaseModel):
-    plugin_set: Optional[list[FilePath]] = Field(aliases=['-s'], description=f'(plugin set) add one or more plugin sets to the loaded plugin sets')
-    plugin_set_catalog: Optional[list[FilePath]] = Field(aliases=['-S'], description=f'(plugin set) add one or more plugin set catalogs to the loaded plugin set catalogs; if no plugin set catalogs or plugin sets are specified, load {file_or(TurtlesApp.default_plugin_set_catalog_choices())}')
+    plugin_set: Optional[list[FilePath]] = Field(aliases=['-s'], description=f'(plugin sets) add one or more plugin sets to the loaded plugin sets')
+    plugin_set_catalog: Optional[list[FilePath]] = Field(aliases=['-S'], description=f'(plugin sets) add one or more plugin set catalogs to the loaded plugin set catalogs; if no plugin set catalogs or plugin sets are specified, load {file_or(TurtlesApp.default_plugin_set_catalog_choices())}')
     plugin_signing_credentials: Optional[FilePath] = Field(aliases=['-c'], description=f'(plugin signing credentials) load the plugin signing credentials from the given file, or if none, from {file_or(TurtlesApp.default_plugin_signing_credentials_choices())}')
     plugin_signing_password: Optional[str] = Field(description='(plugin signing credentials) set the plugin signing password, or if none, prompt interactively')
 
@@ -65,6 +65,13 @@ class PluginBuildingOptions(BaseModel):
         if single := TurtlesApp.select_default_plugin_set_catalog():
             return [single]
         raise FileNotFoundError(file_or(TurtlesApp.default_plugin_set_catalog_choices()))
+
+    def get_plugin_signing_credentials(self) -> Path:
+        if self.plugin_signing_credentials:
+            return path(self.plugin_signing_credentials)
+        if ret := TurtlesApp.select_default_plugin_signing_credentials():
+            return ret
+        raise FileNotFoundError(file_or(TurtlesApp.default_plugin_signing_credentials_choices()))
 
 
 class PluginDeploymentOptions(BaseModel):
@@ -237,10 +244,8 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
             self._app.load_plugin_set_catalogs(psc)
         for ps in build_plugin_command.get_plugin_sets():
             self._app.load_plugin_sets(ps)
-        # Prerequisites
-        self._app.load_plugin_sets(build_plugin_command.plugin_set_catalog)
-        self._app.load_plugin_signing_credentials(build_plugin_command.plugin_signing_credentials)
-        self._obtain_password(build_plugin_command)
+        self._app.load_plugin_signing_credentials(build_plugin_command.get_plugin_signing_credentials())
+        self._obtain_password(build_plugin_command, non_interactive=build_plugin_command.non_interactive)
         # Action
         # ... plugin_id -> (set_id, jar_path, plugin)
         ret = self._app.build_plugin(build_plugin_command.get_plugin_identifiers())
@@ -253,8 +258,10 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
         self._do_string_command(string_command)
 
     def _deploy_plugin(self, deploy_plugin_command: DeployPluginCommand) -> None:
-        # Prerequisites
-        self._app.load_plugin_registries(deploy_plugin_command.plugin_registry_catalog)
+        for prc in deploy_plugin_command.get_plugin_registry_catalogs():
+            self._app.load_plugin_registry_catalogs(prc)
+        for pr in deploy_plugin_command.get_plugin_registries():
+            self._app.load_plugin_registries(pr)
         # Action
         # ... (src_path, plugin_id) -> list of (registry_id, layer_id, dst_path, plugin)
         ret = self._app.deploy_plugin(deploy_plugin_command.get_plugin_jars(),
@@ -274,21 +281,26 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
     def _license(self, string_command: StringCommand) -> None:
         self._do_string_command(string_command)
 
-    def _obtain_password(self, non_interactive_options: NonInteractiveOptions) -> None:
-        if non_interactive_options.plugin_signing_password is not None:
-            _p = non_interactive_options.plugin_signing_password
-        elif non_interactive_options.non_interactive:
+    def _obtain_password(self, plugin_building_options: PluginBuildingOptions, non_interactive: bool=False) -> None:
+        if plugin_building_options.plugin_signing_password:
+            _p = plugin_building_options.plugin_signing_password
+        elif not non_interactive:
             _p = getpass('Plugin signing password: ')
         else:
             self._parser.error('no plugin signing password specified while in non-interactive mode')
         self._app.set_password(lambda: _p)
 
     def _release_plugin(self, release_plugin_command: ReleasePluginCommand) -> None:
-        # Prerequisites
-        self._app.load_plugin_sets(release_plugin_command.plugin_set_catalog)
-        self._app.load_plugin_registries(release_plugin_command.plugin_registry_catalog)
-        self._app.load_plugin_signing_credentials(release_plugin_command.plugin_signing_credentials)
-        self._obtain_password(release_plugin_command)
+        for psc in release_plugin_command.get_plugin_set_catalogs():
+            self._app.load_plugin_set_catalogs(psc)
+        for ps in release_plugin_command.get_plugin_sets():
+            self._app.load_plugin_sets(ps)
+        for prc in release_plugin_command.get_plugin_registry_catalogs():
+            self._app.load_plugin_registry_catalogs(prc)
+        for pr in release_plugin_command.get_plugin_registries():
+            self._app.load_plugin_registries(pr)
+        self._app.load_plugin_signing_credentials(release_plugin_command.get_plugin_signing_credentials())
+        self._obtain_password(release_plugin_command, non_interactive=release_plugin_command.non_interactive)
         # Action
         # ... plugin_id -> list of (registry_id, layer_id, dst_path, plugin)
         ret = self._app.release_plugin(release_plugin_command.get_plugin_identifiers(),
