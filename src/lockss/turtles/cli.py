@@ -160,12 +160,12 @@ class ReleasePluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDep
 
 class TurtlesCommand(BaseModel):
     bp: Optional[BuildPluginCommand] = Field(description='synonym for: build-plugin')
-    build_plugin: Optional[BuildPluginCommand] = Field(description='build (package and sign) plugins')
+    build_plugin: Optional[BuildPluginCommand] = Field(description='build (package and sign) plugins', alias='build-plugin')
     copyright: Optional[StringCommand.type(__copyright__)] = Field(description=COPYRIGHT_DESCRIPTION)
-    deploy_plugin: Optional[DeployPluginCommand] = Field(description='deploy plugins')
+    deploy_plugin: Optional[DeployPluginCommand] = Field(description='deploy plugins', alias='deploy-plugin')
     dp: Optional[DeployPluginCommand] = Field(description='synonym for: deploy-plugin')
     license: Optional[StringCommand.type(__license__)] = Field(description=LICENSE_DESCRIPTION)
-    release_plugin: Optional[ReleasePluginCommand] = Field(description='release (build and deploy) plugins')
+    release_plugin: Optional[ReleasePluginCommand] = Field(description='release (build and deploy) plugins', alias='release-plugin')
     rp: Optional[ReleasePluginCommand] = Field(description='synonym for: release-plugin')
     version: Optional[StringCommand.type(__version__)] = Field(description=VERSION_DESCRIPTION)
 
