@@ -43,7 +43,6 @@ from pydantic.v1.class_validators import validator
 import tabulate
 from typing import Optional
 
-from lockss.turtles.plugin_registry import PluginRegistryLayer
 from . import __copyright__, __license__, __version__
 from .app import TurtlesApp
 from .plugin_registry import PluginRegistryLayerIdentifier

@@ -54,7 +54,7 @@ class PluginSetCatalog(BaseModelWithRoot):
     plugin_set_files: list[str] = Field(min_length=1, description="A non-empty list of plugin set files", title='Plugin Set Files', alias='plugin-set-files')
 
     def get_plugin_set_files(self) -> list[Path]:
-        return [self._get_root().joinpath(p) for p in self.plugin_set_files]
+        return [self.get_root().joinpath(p) for p in self.plugin_set_files]
 
 
 PluginSetBuilderType = Literal['ant', 'maven']
@@ -70,10 +70,10 @@ class BasePluginSetBuilder(BaseModelWithRoot, ABC):
         pass
 
     def get_main(self) -> Path:
-        return self._get_root().joinpath(self._get_main())
+        return self.get_root().joinpath(self._get_main())
 
     def get_test(self) -> Path:
-        return self._get_root().joinpath(self._get_test())
+        return self.get_root().joinpath(self._get_test())
 
     def get_type(self) -> PluginSetBuilderType:
         return getattr(self, 'type')
@@ -91,7 +91,7 @@ class BasePluginSetBuilder(BaseModelWithRoot, ABC):
         return getattr(self, 'test')
 
     def _plugin_path(self, plugin_id: PluginIdentifier) -> Path:
-        return self.get_main_path().joinpath(Plugin.id_to_file(plugin_id))
+        return self.get_main().joinpath(Plugin.id_to_file(plugin_id))
 
 
 class AntPluginSetBuilder(BasePluginSetBuilder):
@@ -121,7 +121,7 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
         if not self._built:
             # Do build
             subprocess.run('ant load-plugins',
-                           shell=True, cwd=self._get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+                           shell=True, cwd=self.get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             self._built = True
 
     def _little_build(self, plugin_id: PluginIdentifier, keystore_path: Path, keystore_alias: str, keystore_password: str=None) -> tuple[Path, Plugin]:
@@ -142,14 +142,14 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
             cur_id = cur_plugin.get_parent_identifier()
         # Invoke jarplugin
         jar_fstr = Plugin.id_to_file(plugin_id)
-        jar_path = self._get_root().joinpath('plugins/jars', f'{plugin_id}.jar')
+        jar_path = self.get_root().joinpath('plugins/jars', f'{plugin_id}.jar')
         jar_path.parent.mkdir(parents=True, exist_ok=True)
         cmd = ['test/scripts/jarplugin',
                '-j', str(jar_path),
                '-p', str(jar_fstr)]
         for d in dirs:
             cmd.extend(['-d', d])
-        subprocess.run(cmd, cwd=self._get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+        subprocess.run(cmd, cwd=self.get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
         # Invoke signplugin
         cmd = ['test/scripts/signplugin',
                '--jar', str(jar_path),
@@ -158,15 +158,15 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
         if keystore_password is not None:
             cmd.extend(['--password', keystore_password])
         try:
-            subprocess.run(cmd, cwd=self._get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+            subprocess.run(cmd, cwd=self.get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
         except subprocess.CalledProcessError as cpe:
             raise self._sanitize(cpe)
         if not jar_path.is_file():
             raise FileNotFoundError(str(jar_path))
         return jar_path, orig_plugin
 
-    def _plugin_path(self, plugin_id: PluginIdentifier) -> Path:
-        return self.get_main_path().joinpath(Plugin.id_to_file(plugin_id))
+    # def _plugin_path(self, plugin_id: PluginIdentifier) -> Path:
+    #     return self.get_main().joinpath(Plugin.id_to_file(plugin_id))
 
     def _sanitize(self, called_process_error: subprocess.CalledProcessError) -> subprocess.CalledProcessError:
         cmd = called_process_error.cmd[:]
@@ -203,13 +203,13 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
                    f'-Dkeystore.alias={keystore_alias}',
                    f'-Dkeystore.password={keystore_password}']
             try:
-                subprocess.run(cmd, cwd=self._get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
+                subprocess.run(cmd, cwd=self.get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             except subprocess.CalledProcessError as cpe:
                 raise self._sanitize(cpe)
             self._built = True
 
     def _little_build(self, plugin_id: PluginIdentifier) -> tuple[Path, Plugin]:
-        jar_path = self._get_root().joinpath('target', 'pluginjars', f'{plugin_id}.jar')
+        jar_path = self.get_root().joinpath('target', 'pluginjars', f'{plugin_id}.jar')
         if not jar_path.is_file():
             raise Exception(f'{plugin_id}: built JAR not found: {jar_path!s}')
         return jar_path, Plugin.from_jar(jar_path)
@@ -253,9 +253,9 @@ class PluginSet(BaseModel):
     def has_plugin(self, plugin_id: PluginIdentifier) -> bool:
         return self.get_builder().has_plugin(plugin_id)
 
+    def initialize(self, root: Path) -> PluginSet:
+        self.get_builder().initialize(root)
+        return self
+
     def make_plugin(self, plugin_id: PluginIdentifier) -> Plugin:
         return self.get_builder().make_plugin(plugin_id)
-
-    def _initialize(self, root: Path) -> PluginSet:
-        self.get_builder()._initialize(root)
-        return self

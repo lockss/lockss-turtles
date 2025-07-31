@@ -31,7 +31,7 @@
 from collections.abc import Callable
 from pydantic import ValidationError
 from pydantic_core import ErrorDetails
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 from unittest import TestCase
 
 

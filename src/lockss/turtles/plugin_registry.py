@@ -54,7 +54,7 @@ class PluginRegistryCatalog(BaseModelWithRoot):
     plugin_registry_files: list[str] = Field(min_length=1, description="A non-empty list of plugin registry files", title='Plugin Registry Files', alias='plugin-registry-files')
 
     def get_plugin_registry_files(self) -> list[Path]:
-        return [self._get_root().joinpath(pstr) for pstr in self.plugin_registry_files]
+        return [self.get_root().joinpath(pstr) for pstr in self.plugin_registry_files]
 
 
 PluginRegistryLayoutType = Literal['directory', 'rcs']
@@ -132,11 +132,11 @@ class DirectoryPluginRegistryLayout(BasePluginRegistryLayout):
     file_naming_convention: Optional[PluginRegistryLayoutFileNamingConvention] = Field(BasePluginRegistryLayout.FILE_NAMING_CONVENTION_DEFAULT, **BasePluginRegistryLayout.FILE_NAMING_CONVENTION_FIELD)
 
     def _copy_jar(self, src_path: Path, dst_path: Path, interactive: bool=False) -> None:
-        basename = dst_path.name
-        subprocess.run(['cp', str(src_path), str(dst_path)], check=True, cwd=self.get_path())
+        dst_dir, basename = dst_path.parent, dst_path.name
+        subprocess.run(['cp', str(src_path), str(dst_path)], check=True, cwd=dst_dir)
         if subprocess.run('command -v selinuxenabled > /dev/null && selinuxenabled && command -v chcon > /dev/null', shell=True).returncode == 0:
             cmd = ['chcon', '-t', 'httpd_sys_content_t', basename]
-            subprocess.run(cmd, check=True, cwd=self.get_path())
+            subprocess.run(cmd, check=True, cwd=dst_dir)
 
 
 class RcsPluginRegistryLayout(DirectoryPluginRegistryLayout):
@@ -144,13 +144,13 @@ class RcsPluginRegistryLayout(DirectoryPluginRegistryLayout):
     file_naming_convention: Optional[PluginRegistryLayoutFileNamingConvention] = Field(BasePluginRegistryLayout.FILE_NAMING_CONVENTION_DEFAULT, **BasePluginRegistryLayout.FILE_NAMING_CONVENTION_FIELD)
 
     def _copy_jar(self, src_path: Path, dst_path: Path, interactive: bool=False) -> None:
-        basename = dst_path.name
+        dst_dir, basename = dst_path.parent, dst_path.name
         plugin = Plugin.from_jar(src_path)
-        rcs_path = self.get_path().joinpath('RCS', f'{basename},v')
+        rcs_path = dst_dir.joinpath('RCS', f'{basename},v')
         # Maybe do co -l before the parent's copy
         if dst_path.exists() and rcs_path.is_file():
             cmd = ['co', '-l', basename]
-            subprocess.run(cmd, check=True, cwd=self.get_path())
+            subprocess.run(cmd, check=True, cwd=dst_dir)
         # Do the parent's copy
         super()._copy_jar(src_path, dst_path)
         # Do ci -u after the parent's copy
@@ -158,7 +158,7 @@ class RcsPluginRegistryLayout(DirectoryPluginRegistryLayout):
         if not rcs_path.is_file():
             cmd.append(f'-t-{plugin.get_name()}')
         cmd.append(basename)
-        subprocess.run(cmd, check=True, cwd=self.get_path())
+        subprocess.run(cmd, check=True, cwd=dst_dir)
 
 
 PluginRegistryLayout = Annotated[Union[DirectoryPluginRegistryLayout, RcsPluginRegistryLayout], Field(discriminator='type')]
@@ -175,6 +175,11 @@ class PluginRegistryLayer(BaseModel, ABC):
     name: str = Field(title='Plugin Registry Layer Name', description='A name for the plugin registry layer')
     path: str = Field(title='Plugin Registry Layer Path', description='A root path for the plugin registry layer')
 
+    _plugin_registry: Optional[PluginRegistry]
+
+    def deploy_plugin(self, plugin_id: PluginIdentifier, src_path: Path, interactive: bool=False) -> Optional[tuple[Path, Plugin]]:
+        return self.get_plugin_registry().get_layout().deploy_plugin(plugin_id, self, src_path, interactive)
+
     def get_id(self) -> PluginRegistryLayerIdentifier:
         return self.id
 
@@ -186,6 +191,19 @@ class PluginRegistryLayer(BaseModel, ABC):
 
     def get_path(self) -> Path:
         return path(self.path)
+
+    def get_plugin_registry(self) -> PluginRegistry:
+        if self._plugin_registry is None:
+            raise RuntimeError('Uninitialized plugin registry')
+        return self._plugin_registry
+
+    def initialize(self, plugin_registry: PluginRegistry) -> PluginRegistryLayer:
+        self._plugin_registry = plugin_registry
+        return self
+
+    def model_post_init(self, context: Any) -> None:
+        super().model_post_init(context)
+        self._plugin_registry = None
 
 
 PluginRegistryKind = Literal['PluginRegistry']
@@ -199,7 +217,7 @@ class PluginRegistry(BaseModelWithRoot):
     id: PluginRegistryIdentifier = Field(title='Plugin Registry Identifier', description='An identifier for the plugin set')
     name: str = Field(title='Plugin Registry Name', description='A name for the plugin set')
     layout: PluginRegistryLayout = Field(title='Plugin Registry Layout', description='A layout for the plugin registry')
-    layers: list[PluginRegistryLayer] = Field(min_length=1, title='Plugin Registry Layers', description="A non-empty list of plugin registry layers", alias='plugin-registry-layers')
+    layers: list[PluginRegistryLayer] = Field(min_length=1, title='Plugin Registry Layers', description="A non-empty list of plugin registry layers")
     plugin_identifiers: list[PluginIdentifier] = Field(min_length=1, title='Plugin Identifiers', description="A non-empty list of plugin identifiers", alias='plugin-identifiers')
     suppressed_plugin_identifiers: list[PluginIdentifier] = Field([], title='Suppressed Plugin Identifiers', description="A list of suppressed plugin identifiers", alias='suppressed-plugin-identifiers')
 
@@ -236,3 +254,5 @@ class PluginRegistry(BaseModelWithRoot):
     def model_post_init(self, context: Any) -> None:
         super().model_post_init(context)
         self.get_layout().initialize(self)
+        for layer in self.get_layers():
+            layer.initialize(self)

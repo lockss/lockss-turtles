@@ -53,8 +53,8 @@ PluginSigningCredentialsKind = Literal['PluginSigningCredentials']
 
 class PluginSigningCredentials(BaseModelWithRoot):
     kind: PluginSigningCredentialsKind = Field(description="This object's kind")
-    plugin_signing_keystore: str = Field(title='Plugin Signing Keystore', description='A path to the plugin signing keystore')
-    plugin_signing_alias: str = Field(title='Plugin Signing Alias', description='The plugin signing alias to use')
+    plugin_signing_keystore: str = Field(title='Plugin Signing Keystore', description='A path to the plugin signing keystore', alias='plugin-signing-keystore')
+    plugin_signing_alias: str = Field(title='Plugin Signing Alias', description='The plugin signing alias to use', alias='plugin-signing-alias')
 
     def get_plugin_signing_alias(self) -> str:
         return self.plugin_signing_alias
@@ -107,7 +107,7 @@ class TurtlesApp(object):
         with plugin_registry_path.open('r') as fpr:
             for yaml_obj in yaml.safe_load_all(fpr):
                 if isinstance(yaml_obj, dict) and yaml_obj.get('kind') in PluginRegistryKind.__args__:
-                    plugin_registry = PluginRegistry(**yaml_obj).initialize(plugin_registry_path)
+                    plugin_registry = PluginRegistry(**yaml_obj).initialize(plugin_registry_path.parent)
                     self._plugin_registries.append(plugin_registry)
         return self
 
@@ -118,7 +118,7 @@ class TurtlesApp(object):
         with plugin_registry_catalog_path.open('r') as fprc:
             for yaml_obj in yaml.safe_load_all(fprc):
                 if isinstance(yaml_obj, dict) and yaml_obj.get('kind') in PluginRegistryCatalogKind.__args__:
-                    plugin_registry_catalog = PluginRegistryCatalog(**yaml_obj).initialize(plugin_registry_catalog_path)
+                    plugin_registry_catalog = PluginRegistryCatalog(**yaml_obj).initialize(plugin_registry_catalog_path.parent)
                     self._plugin_registry_catalogs.append(plugin_registry_catalog)
                     for plugin_registry_file in plugin_registry_catalog.get_plugin_registry_files():
                         self.load_plugin_registries(plugin_registry_catalog_path.joinpath(plugin_registry_file))
@@ -131,7 +131,7 @@ class TurtlesApp(object):
         with plugin_set_catalog_path.open('r') as fpsc:
             for yaml_obj in yaml.safe_load_all(fpsc):
                 if isinstance(yaml_obj, dict) and yaml_obj.get('kind') in PluginSetCatalogKind.__args__:
-                    plugin_set_catalog = PluginSetCatalog(**yaml_obj).initialize(plugin_set_catalog_path)
+                    plugin_set_catalog = PluginSetCatalog(**yaml_obj).initialize(plugin_set_catalog_path.parent)
                     self._plugin_set_catalogs.append(plugin_set_catalog)
                     for plugin_set_file in plugin_set_catalog.get_plugin_set_files():
                         self.load_plugin_sets(plugin_set_catalog_path.joinpath(plugin_set_file))
@@ -144,7 +144,7 @@ class TurtlesApp(object):
         with plugin_set_path.open('r') as fps:
             for yaml_obj in yaml.safe_load_all(fps):
                 if isinstance(yaml_obj, dict) and yaml_obj.get('kind') in PluginSetKind.__args__:
-                    plugin_set = PluginSet(**yaml_obj).initialize(plugin_set_path)
+                    plugin_set = PluginSet(**yaml_obj).initialize(plugin_set_path.parent)
                     self._plugin_sets.append(plugin_set)
         return self
 
@@ -153,7 +153,7 @@ class TurtlesApp(object):
         if self._plugin_signing_credentials:
             raise ValueError(f'Plugin signing credentials already loaded from: {self._plugin_signing_credentials.get_root()!s}')
         with plugin_signing_credentials_path.open('r') as fpsc:
-            self._plugin_signing_credentials = PluginSigningCredentials(**yaml.safe_load(fpsc)).initialize(plugin_signing_credentials_path)
+            self._plugin_signing_credentials = PluginSigningCredentials(**yaml.safe_load(fpsc)).initialize(plugin_signing_credentials_path.parent)
         return self
 
     def release_plugin(self, plugin_ids: list[PluginIdentifier], layer_ids: list[PluginRegistryLayerIdentifier], interactive: bool=False) -> dict[str, list[tuple[str, str, Path, Plugin]]]:
