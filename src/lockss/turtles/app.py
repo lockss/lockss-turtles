@@ -36,10 +36,11 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import ClassVar, Literal, Optional, Union
 
-import yaml
+from exceptiongroup import ExceptionGroup
 from lockss.pybasic.fileutil import path
-from pydantic import BaseModel, Field
+from pydantic import Field, ValidationError
 import xdg
+import yaml
 
 from .plugin import Plugin, PluginIdentifier
 from .plugin_registry import PluginRegistry, PluginRegistryCatalog, PluginRegistryCatalogKind, PluginRegistryKind, PluginRegistryLayerIdentifier
@@ -104,56 +105,115 @@ class TurtlesApp(object):
         plugin_registry_path = path(plugin_registry_path_or_str)
         if plugin_registry_path in map(lambda pr: pr.get_root(), self._plugin_registries):
             raise ValueError(f'Plugin registries already loaded from: {plugin_registry_path!s}')
+        errs, at_least_one = [], False
         with plugin_registry_path.open('r') as fpr:
             for yaml_obj in yaml.safe_load_all(fpr):
                 if isinstance(yaml_obj, dict) and yaml_obj.get('kind') in PluginRegistryKind.__args__:
-                    plugin_registry = PluginRegistry(**yaml_obj).initialize(plugin_registry_path.parent)
-                    self._plugin_registries.append(plugin_registry)
+                    try:
+                        plugin_registry = PluginRegistry(**yaml_obj).initialize(plugin_registry_path.parent)
+                        self._plugin_registries.append(plugin_registry)
+                        at_least_one = True
+                    except ValidationError as ve:
+                        errs.append(ve)
+        if errs:
+            raise ExceptionGroup(f'Errors while loading plugin registries from: {plugin_registry_path!s}', errs)
+        if not at_least_one:
+            raise ValueError(f'No plugin registries found in: {plugin_registry_path!s}')
         return self
 
     def load_plugin_registry_catalogs(self, plugin_registry_catalog_path_or_str: PathOrStr) -> TurtlesApp:
         plugin_registry_catalog_path = path(plugin_registry_catalog_path_or_str)
         if plugin_registry_catalog_path in map(lambda prc: prc.get_root(), self._plugin_registry_catalogs):
             raise ValueError(f'Plugin registry catalogs already loaded from: {plugin_registry_catalog_path!s}')
+        errs, at_least_one = [], False
         with plugin_registry_catalog_path.open('r') as fprc:
             for yaml_obj in yaml.safe_load_all(fprc):
                 if isinstance(yaml_obj, dict) and yaml_obj.get('kind') in PluginRegistryCatalogKind.__args__:
-                    plugin_registry_catalog = PluginRegistryCatalog(**yaml_obj).initialize(plugin_registry_catalog_path.parent)
-                    self._plugin_registry_catalogs.append(plugin_registry_catalog)
-                    for plugin_registry_file in plugin_registry_catalog.get_plugin_registry_files():
-                        self.load_plugin_registries(plugin_registry_catalog_path.joinpath(plugin_registry_file))
+                    try:
+                        plugin_registry_catalog = PluginRegistryCatalog(**yaml_obj).initialize(plugin_registry_catalog_path.parent)
+                        self._plugin_registry_catalogs.append(plugin_registry_catalog)
+                        at_least_one = True
+                        for plugin_registry_file in plugin_registry_catalog.get_plugin_registry_files():
+                            try:
+                                self.load_plugin_registries(plugin_registry_catalog_path.joinpath(plugin_registry_file))
+                            except ValueError as ve:
+                                errs.append(ve)
+                            except ExceptionGroup as eg:
+                                errs.extend(eg.exceptions)
+                    except ValidationError as ve:
+                        errs.append(ve)
+        if errs:
+            raise ExceptionGroup(f'Errors while loading plugin registry catalogs from: {plugin_registry_catalog_path!s}', errs)
+        if not at_least_one:
+            raise ValueError(f'No plugin registry catalogs found in: {plugin_registry_catalog_path!s}')
         return self
 
     def load_plugin_set_catalogs(self, plugin_set_catalog_path_or_str: PathOrStr) -> TurtlesApp:
         plugin_set_catalog_path = path(plugin_set_catalog_path_or_str)
         if plugin_set_catalog_path in map(lambda psc: psc.get_root(), self._plugin_set_catalogs):
             raise ValueError(f'Plugin set catalogs already loaded from: {plugin_set_catalog_path!s}')
+        errs, at_least_one = [], False
         with plugin_set_catalog_path.open('r') as fpsc:
             for yaml_obj in yaml.safe_load_all(fpsc):
                 if isinstance(yaml_obj, dict) and yaml_obj.get('kind') in PluginSetCatalogKind.__args__:
-                    plugin_set_catalog = PluginSetCatalog(**yaml_obj).initialize(plugin_set_catalog_path.parent)
-                    self._plugin_set_catalogs.append(plugin_set_catalog)
-                    for plugin_set_file in plugin_set_catalog.get_plugin_set_files():
-                        self.load_plugin_sets(plugin_set_catalog_path.joinpath(plugin_set_file))
+                    try:
+                        plugin_set_catalog = PluginSetCatalog(**yaml_obj).initialize(plugin_set_catalog_path.parent)
+                        self._plugin_set_catalogs.append(plugin_set_catalog)
+                        at_least_one = True
+                        for plugin_set_file in plugin_set_catalog.get_plugin_set_files():
+                            try:
+                                self.load_plugin_sets(plugin_set_catalog_path.joinpath(plugin_set_file))
+                            except ValueError as ve:
+                                errs.append(ve)
+                            except ExceptionGroup as eg:
+                                errs.extend(eg.exceptions)
+                    except ValidationError as ve:
+                        errs.append(ve)
+        if errs:
+            raise ExceptionGroup(f'Errors while loading plugin set catalogs from: {plugin_set_catalog_path!s}', errs)
+        if not at_least_one:
+            raise ValueError(f'No plugin set catalogs found in: {plugin_set_catalog_path!s}')
         return self
 
     def load_plugin_sets(self, plugin_set_path_or_str: PathOrStr) -> TurtlesApp:
         plugin_set_path = path(plugin_set_path_or_str)
         if plugin_set_path in map(lambda ps: ps.get_root(), self._plugin_sets):
             raise ValueError(f'Plugin sets already loaded from: {plugin_set_path!s}')
+        errs, at_least_one = [], False
         with plugin_set_path.open('r') as fps:
             for yaml_obj in yaml.safe_load_all(fps):
                 if isinstance(yaml_obj, dict) and yaml_obj.get('kind') in PluginSetKind.__args__:
-                    plugin_set = PluginSet(**yaml_obj).initialize(plugin_set_path.parent)
-                    self._plugin_sets.append(plugin_set)
+                    try:
+                        plugin_set = PluginSet(**yaml_obj).initialize(plugin_set_path.parent)
+                        self._plugin_sets.append(plugin_set)
+                        at_least_one = True
+                    except ValidationError as ve:
+                        errs.append(ve)
+        if errs:
+            raise ExceptionGroup(f'Errors while loading plugin sets from: {plugin_set_path!s}', errs)
+        if not at_least_one:
+            raise ValueError(f'No plugin sets found in: {plugin_set_path!s}')
         return self
 
     def load_plugin_signing_credentials(self, plugin_signing_credentials_path_or_str: PathOrStr) -> TurtlesApp:
         plugin_signing_credentials_path = path(plugin_signing_credentials_path_or_str)
         if self._plugin_signing_credentials:
             raise ValueError(f'Plugin signing credentials already loaded from: {self._plugin_signing_credentials.get_root()!s}')
+        found = 0
         with plugin_signing_credentials_path.open('r') as fpsc:
-            self._plugin_signing_credentials = PluginSigningCredentials(**yaml.safe_load(fpsc)).initialize(plugin_signing_credentials_path.parent)
+            for yaml_obj in yaml.safe_load_all(fpsc):
+                if isinstance(yaml_obj, dict) and yaml_obj.get('kind') in PluginSigningCredentialsKind.__args__:
+                    found = found + 1
+                    if not self._plugin_signing_credentials:
+                        try:
+                            plugin_signing_credentials = PluginSigningCredentials(**yaml.safe_load(fpsc)).initialize(plugin_signing_credentials_path.parent)
+                            self._plugin_signing_credentials = plugin_signing_credentials
+                        except ValidationError as ve:
+                            raise ExceptionGroup(f'Errors while loading plugin signing credentials from: {plugin_signing_credentials_path!s}', [ve])
+        if found == 0:
+            raise ValueError(f'No plugin signing credentials found in: {plugin_signing_credentials_path!s}')
+        if found > 1:
+            raise ValueError(f'Multiple plugin signing credentials found in: {plugin_signing_credentials_path!s}')
         return self
 
     def release_plugin(self, plugin_ids: list[PluginIdentifier], layer_ids: list[PluginRegistryLayerIdentifier], interactive: bool=False) -> dict[str, list[tuple[str, str, Path, Plugin]]]:

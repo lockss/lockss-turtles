@@ -35,6 +35,7 @@ Tool for managing LOCKSS plugin sets and LOCKSS plugin registries
 from getpass import getpass
 from pathlib import Path
 
+from exceptiongroup import ExceptionGroup
 from lockss.pybasic.cliutil import BaseCli, StringCommand, COPYRIGHT_DESCRIPTION, LICENSE_DESCRIPTION, VERSION_DESCRIPTION
 from lockss.pybasic.fileutil import file_lines, path
 from lockss.pybasic.outpututil import OutputFormatOptions
@@ -239,11 +240,29 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
         return self._build_plugin(build_plugin_command)
 
     def _build_plugin(self, build_plugin_command: BuildPluginCommand) -> None:
+        errs = []
         for psc in build_plugin_command.get_plugin_set_catalogs():
-            self._app.load_plugin_set_catalogs(psc)
+            try:
+                self._app.load_plugin_set_catalogs(psc)
+            except ValueError as ve:
+                errs.append(ve)
+            except ExceptionGroup as eg:
+                errs.extend(eg.exceptions)
         for ps in build_plugin_command.get_plugin_sets():
-            self._app.load_plugin_sets(ps)
-        self._app.load_plugin_signing_credentials(build_plugin_command.get_plugin_signing_credentials())
+            try:
+                self._app.load_plugin_sets(ps)
+            except ValueError as ve:
+                errs.append(ve)
+            except ExceptionGroup as eg:
+                errs.extend(eg.exceptions)
+        try:
+            self._app.load_plugin_signing_credentials(build_plugin_command.get_plugin_signing_credentials())
+        except ValueError as ve:
+            errs.append(ve)
+        except ExceptionGroup as eg:
+            errs.extend(eg.exceptions)
+        if errs:
+            raise ExceptionGroup(f'Errors while setting up the environment for building plugins', errs)
         self._obtain_password(build_plugin_command, non_interactive=build_plugin_command.non_interactive)
         # Action
         # ... plugin_id -> (set_id, jar_path, plugin)
@@ -257,10 +276,23 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
         self._do_string_command(string_command)
 
     def _deploy_plugin(self, deploy_plugin_command: DeployPluginCommand) -> None:
+        errs = []
         for prc in deploy_plugin_command.get_plugin_registry_catalogs():
-            self._app.load_plugin_registry_catalogs(prc)
+            try:
+                self._app.load_plugin_registry_catalogs(prc)
+            except ValueError as ve:
+                errs.append(ve)
+            except ExceptionGroup as eg:
+                errs.extend(eg.exceptions)
         for pr in deploy_plugin_command.get_plugin_registries():
-            self._app.load_plugin_registries(pr)
+            try:
+                self._app.load_plugin_registries(pr)
+            except ValueError as ve:
+                errs.append(ve)
+            except ExceptionGroup as eg:
+                errs.extend(eg.exceptions)
+        if errs:
+            raise ExceptionGroup(f'Errors while setting up the environment for deploying plugins', errs)
         # Action
         # ... (src_path, plugin_id) -> list of (registry_id, layer_id, dst_path, plugin)
         ret = self._app.deploy_plugin(deploy_plugin_command.get_plugin_jars(),
@@ -290,15 +322,43 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
         self._app.set_password(lambda: _p)
 
     def _release_plugin(self, release_plugin_command: ReleasePluginCommand) -> None:
+        errs = []
         for psc in release_plugin_command.get_plugin_set_catalogs():
-            self._app.load_plugin_set_catalogs(psc)
+            try:
+                self._app.load_plugin_set_catalogs(psc)
+            except ValueError as ve:
+                errs.append(ve)
+            except ExceptionGroup as eg:
+                errs.extend(eg.exceptions)
         for ps in release_plugin_command.get_plugin_sets():
-            self._app.load_plugin_sets(ps)
+            try:
+                self._app.load_plugin_sets(ps)
+            except ValueError as ve:
+                errs.append(ve)
+            except ExceptionGroup as eg:
+                errs.extend(eg.exceptions)
         for prc in release_plugin_command.get_plugin_registry_catalogs():
-            self._app.load_plugin_registry_catalogs(prc)
+            try:
+                self._app.load_plugin_registry_catalogs(prc)
+            except ValueError as ve:
+                errs.append(ve)
+            except ExceptionGroup as eg:
+                errs.extend(eg.exceptions)
         for pr in release_plugin_command.get_plugin_registries():
-            self._app.load_plugin_registries(pr)
-        self._app.load_plugin_signing_credentials(release_plugin_command.get_plugin_signing_credentials())
+            try:
+                self._app.load_plugin_registries(pr)
+            except ValueError as ve:
+                errs.append(ve)
+            except ExceptionGroup as eg:
+                errs.extend(eg.exceptions)
+        try:
+            self._app.load_plugin_signing_credentials(release_plugin_command.get_plugin_signing_credentials())
+        except ValueError as ve:
+            errs.append(ve)
+        except ExceptionGroup as eg:
+            errs.extend(eg.exceptions)
+        if errs:
+            raise ExceptionGroup(f'Errors while setting up the environment for deploying plugins', errs)
         self._obtain_password(release_plugin_command, non_interactive=release_plugin_command.non_interactive)
         # Action
         # ... plugin_id -> list of (registry_id, layer_id, dst_path, plugin)
