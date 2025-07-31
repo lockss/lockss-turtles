@@ -206,7 +206,7 @@ class TurtlesApp(object):
                     found = found + 1
                     if not self._plugin_signing_credentials:
                         try:
-                            plugin_signing_credentials = PluginSigningCredentials(**yaml.safe_load(fpsc)).initialize(plugin_signing_credentials_path.parent)
+                            plugin_signing_credentials = PluginSigningCredentials(**yaml_obj).initialize(plugin_signing_credentials_path.parent)
                             self._plugin_signing_credentials = plugin_signing_credentials
                         except ValidationError as ve:
                             raise ExceptionGroup(f'Errors while loading plugin signing credentials from: {plugin_signing_credentials_path!s}', [ve])
