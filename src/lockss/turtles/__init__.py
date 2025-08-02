@@ -5,7 +5,7 @@ Library and command line tool to manage LOCKSS plugin sets and LOCKSS plugin
 registries.
 """
 
-__version__ = '0.6.0-dev17'
+__version__ = '0.6.0-dev18'
 
 __copyright__ = '''
 Copyright (c) 2000-2025, Board of Trustees of Leland Stanford Jr. University

@@ -28,7 +28,7 @@
 
 [project]
 name = "lockss-turtles"
-version = "0.6.0-dev17" # Always change in __init__.py, and at release time in README.rst and CHANGELOG.rst
+version = "0.6.0-dev18" # Always change in __init__.py, and at release time in README.rst and CHANGELOG.rst
 description = "Library and command line tool to manage LOCKSS plugin sets and LOCKSS plugin registries"
 license = { text = "BSD-3-Clause" }
 readme = "README.rst"

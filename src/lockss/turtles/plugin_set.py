@@ -28,6 +28,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+"""
+Representations of plugin sets.
+"""
+
 # Remove in Python 3.14
 # See https://stackoverflow.com/questions/33533148/how-do-i-type-hint-a-method-with-the-type-of-the-enclosing-class/33533514#33533514
 from __future__ import annotations
@@ -45,63 +49,168 @@ from pydantic import BaseModel, Field
 from .plugin import Plugin, PluginIdentifier
 from .util import BaseModelWithRoot
 
-
+#: A type alias for the plugin set catalog kind.
 PluginSetCatalogKind = Literal['PluginSetCatalog']
 
 
 class PluginSetCatalog(BaseModelWithRoot):
+    """
+    A Pydantic model (``lockss.turtles.util.BaseModelWithRoot``) to represent a
+    plugin set catalog.
+    """
+    #: This object's kind.
     kind: PluginSetCatalogKind = Field(description="This object's kind")
+    #: A non-empty list of plugin set files.
     plugin_set_files: list[str] = Field(min_length=1, description="A non-empty list of plugin set files", title='Plugin Set Files', alias='plugin-set-files')
 
     def get_plugin_set_files(self) -> list[Path]:
+        """
+        Return this plugin set catalog's list of plugin set definition file
+        paths (relative to the root if not absolute).
+
+        :return: A list of plugin set definition file paths.
+        :rtype: list[Path]
+        """
         return [self.get_root().joinpath(p) for p in self.plugin_set_files]
 
 
+#: A type alias for the plugin set builder type.
 PluginSetBuilderType = Literal['ant', 'maven']
 
 
 class BasePluginSetBuilder(BaseModelWithRoot, ABC):
+    """
+    An abstract Pydantic model (``lockss.turtles.util.BaseModelWithRoot``) to
+    represent a plugin set builder, with concrete implementations
+    ``AntPluginSetBuilder`` and ``MavenPluginSetBuilder``.
+    """
+
+    #: Pydantic definition of the ``type`` field.
     TYPE_FIELD: ClassVar[dict[str, str]] = dict(description='A plugin builder type', title='Plugin Builder Type')
+    #: Pydantic definition of the ``main`` field.
     MAIN_FIELD: ClassVar[dict[str, str]] = dict(description="The path to the plugins' source code, relative to the root of the project", title='Main Code Path')
+    #: Pydantic definition of the ``test`` field.
     TEST_FIELD: ClassVar[dict[str, str]] = dict(description="The path to the plugins' unit tests, relative to the root of the project", title='Test Code Path')
 
     @abstractmethod
     def build_plugin(self, plugin_id: PluginIdentifier, keystore_path: Path, keystore_alias: str, keystore_password=None) -> tuple[Path, Plugin]:
-        pass
+        """
+        Builds the given plugin, using the given plugin signing credentials.
+
+        :param plugin_id: A plugin identifier.
+        :type plugin_id: PluginIdentifier
+        :param keystore_path: The path to the plugin signing keystore.
+        :type keystore_path: Path
+        :param keystore_alias: The signing alias to use from the plugin signing
+                               keystore.
+        :type keystore_alias: str
+        :param keystore_password: The signing password.
+        :type keystore_password: Any
+        :return: A tuple of the plugin JAR path and the corresponding ``Plugin``
+                 object.
+        :rtype: tuple[Path, Plugin]
+        """
+        pass # FIXME: typing of keystore_password
 
     def get_main(self) -> Path:
+        """
+        Returns this plugin set builder's main code path (relative to the root
+        if not absolute).
+
+        :return: This plugin set's main code path.
+        :rtype: Path
+        :raises ValueError: If this object is not properly initialized.
+        """
         return self.get_root().joinpath(self._get_main())
 
     def get_test(self) -> Path:
+        """
+        Returns this plugin set builder's unit test path (relative to the root
+        if not absolute).
+
+        :return: This plugin set's unit test path.
+        :rtype: Path
+        :raises ValueError: If this object is not properly initialized.
+        """
         return self.get_root().joinpath(self._get_test())
 
     def get_type(self) -> PluginSetBuilderType:
+        """
+        Returns this plugin set builder's type.
+
+        :return: This plugin set builder's type.
+        :rtype: PluginSetBuilderType
+        """
         return getattr(self, 'type')
 
     def has_plugin(self, plugin_id: PluginIdentifier) -> bool:
+        """
+        Determines if the given plugin identifier represents a plugin that is
+        present in the plugin set.
+
+        :param plugin_id: A plugin identifier.
+        :type plugin_id: PluginIdentifier
+        :return: Whether the plugin is present in the plugin set.
+        :rtype: bool
+        """
         return self._plugin_path(plugin_id).is_file()
 
     def make_plugin(self, plugin_id: PluginIdentifier) -> Plugin:
+        """
+        Makes a ``Plugin`` object from the given plugin identifier.
+
+        :param plugin_id: A plugin identifier.
+        :type plugin_id: PluginIdentifier
+        :return: The corresponding ``Plugin`` object.
+        :rtype: Plugin
+        """
         return Plugin.from_path(self._plugin_path(plugin_id))
 
     def _get_main(self) -> str:
+        """
+        Returns the concrete implementation's ``main`` field.
+
+        :return: The ``main`` field.
+        :rtype: str
+        """
         return getattr(self, 'main')
 
     def _get_test(self) -> str:
+        """
+        Returns the concrete implementation's ``test`` field.
+
+        :return: The ``test`` field.
+        :rtype: str
+        """
         return getattr(self, 'test')
 
     def _plugin_path(self, plugin_id: PluginIdentifier) -> Path:
+        """
+        Returns the path of the plugin file for the given plugin identifier
+        relative to the plugin set's main code path.
+
+        :param plugin_id: A plugin identifier.
+        :type plugin_id: PluginIdentifier
+        :return: The plugin file.
+        :rtype: Path
+        """
         return self.get_main().joinpath(Plugin.id_to_file(plugin_id))
 
 
 class AntPluginSetBuilder(BasePluginSetBuilder):
+    #: Default value for the ``main`` field.
     DEFAULT_MAIN: ClassVar[str] = 'plugins/src'
+    #: Default value for the ``test`` field.
     DEFAULT_TEST: ClassVar[str] = 'plugins/test/src'
 
+    #: This plugin set builder's type.
     type: Literal['ant'] = Field(**BasePluginSetBuilder.TYPE_FIELD)
+    #: This plugin set builder's main code path.
     main: Optional[str] = Field(DEFAULT_MAIN, **BasePluginSetBuilder.MAIN_FIELD)
+    #: This plugin set builder's unit test path.
     test: Optional[str] = Field(DEFAULT_TEST, **BasePluginSetBuilder.TEST_FIELD)
 
+    #: An internal flag to remember if a build has occurred.
     _built: bool
 
     def build_plugin(self, plugin_id: PluginIdentifier, keystore_path: Path, keystore_alias: str, keystore_password=None) -> tuple[Path, Plugin]:
@@ -118,6 +227,9 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
         self._built = False
 
     def _big_build(self) -> None:
+        """
+        Optionally performs the "big build".
+        """
         if not self._built:
             # Do build
             subprocess.run('ant load-plugins',
@@ -125,10 +237,26 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
             self._built = True
 
     def _little_build(self, plugin_id: PluginIdentifier, keystore_path: Path, keystore_alias: str, keystore_password: str=None) -> tuple[Path, Plugin]:
+        """
+        Performs the "little build" of the given plugin.
+
+        :param plugin_id: A plugin identifier.
+        :type plugin_id: PluginIdentifier
+        :param keystore_path: The path to the plugin signing keystore.
+        :type keystore_path: Path
+        :param keystore_alias: The signing alias to use from the plugin signing
+                               keystore.
+        :type keystore_alias: str
+        :param keystore_password: The signing password.
+        :type keystore_password: str
+        :return: A tuple of the plugin JAR path and the corresponding ``Plugin``
+                 object.
+        :rtype: tuple[Path, Plugin]
+        """
         orig_plugin = None
         cur_id = plugin_id
         # Get all directories for jarplugin -d
-        dirs = list()
+        dirs = []
         while cur_id is not None:
             cur_plugin = self.make_plugin(cur_id)
             orig_plugin = orig_plugin or cur_plugin
@@ -211,7 +339,7 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
     def _little_build(self, plugin_id: PluginIdentifier) -> tuple[Path, Plugin]:
         jar_path = self.get_root().joinpath('target', 'pluginjars', f'{plugin_id}.jar')
         if not jar_path.is_file():
-            raise Exception(f'{plugin_id}: built JAR not found: {jar_path!s}')
+            raise FileNotFoundError(str(jar_path))
         return jar_path, Plugin.from_jar(jar_path)
 
     def _sanitize(self, called_process_error: subprocess.CalledProcessError) -> subprocess.CalledProcessError:

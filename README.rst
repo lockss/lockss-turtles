@@ -2,7 +2,7 @@
 Turtles
 =======
 
-.. |RELEASE| replace:: 0.6.0-dev1
+.. |RELEASE| replace:: 0.6.0-dev18
 .. |RELEASE_DATE| replace:: ?
 
 .. |HELP| replace:: ``--help/-h``
@@ -22,7 +22,7 @@ Turtles
    :alt: Turtles logo
    :align: right
 
-Turtles is a tool to manage LOCKSS plugin sets and LOCKSS plugin registries.
+Turtles is a command line tool and Python library to manage LOCKSS plugin sets and LOCKSS plugin registries.
 
 **Latest release:** |RELEASE| (|RELEASE_DATE|)
 

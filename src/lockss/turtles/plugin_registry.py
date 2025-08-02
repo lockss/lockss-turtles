@@ -87,7 +87,7 @@ class BasePluginRegistryLayout(BaseModel, ABC):
 
     def get_plugin_registry(self) -> PluginRegistry:
         if self._plugin_registry is None:
-            raise RuntimeError('Uninitialized plugin registry')
+            raise ValueError('Uninitialized plugin registry')
         return self._plugin_registry
 
     def get_type(self) -> PluginRegistryLayoutType:
@@ -194,7 +194,7 @@ class PluginRegistryLayer(BaseModel, ABC):
 
     def get_plugin_registry(self) -> PluginRegistry:
         if self._plugin_registry is None:
-            raise RuntimeError('Uninitialized plugin registry')
+            raise ValueError('Uninitialized plugin registry')
         return self._plugin_registry
 
     def initialize(self, plugin_registry: PluginRegistry) -> PluginRegistryLayer:

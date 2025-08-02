@@ -51,7 +51,7 @@ from .util import file_or
 
 
 class PluginBuildingOptions(BaseModel):
-    plugin_set: Optional[list[FilePath]] = Field(aliases=['-s'], description=f'(plugin sets) add one or more plugin sets to the loaded plugin sets')
+    plugin_set: Optional[list[FilePath]] = Field(aliases=['-s'], description=f'(plugin sets) add one or more plugin set definition files to the loaded plugin sets')
     plugin_set_catalog: Optional[list[FilePath]] = Field(aliases=['-S'], description=f'(plugin sets) add one or more plugin set catalogs to the loaded plugin set catalogs; if no plugin set catalogs or plugin sets are specified, load {file_or(TurtlesApp.default_plugin_set_catalog_choices())}')
     plugin_signing_credentials: Optional[FilePath] = Field(aliases=['-c'], description=f'(plugin signing credentials) load the plugin signing credentials from the given file, or if none, from {file_or(TurtlesApp.default_plugin_signing_credentials_choices())}')
     plugin_signing_password: Optional[str] = Field(description='(plugin signing credentials) set the plugin signing password, or if none, prompt interactively')

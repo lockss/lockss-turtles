@@ -52,7 +52,7 @@ class BaseModelWithRoot(BaseModel):
 
     def get_root(self) -> Path:
         if self._root is None:
-            raise RuntimeError('Uninitialized root')
+            raise ValueError('Uninitialized root')
         return self._root
 
     def initialize(self, root: PathOrStr) -> BaseModelWithRoot:

@@ -28,8 +28,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from pathlib import Path
+
 from . import PydanticTestCase
-from lockss.turtles.plugin_set import AntPluginSetBuilder, MavenPluginSetBuilder, PluginSet, PluginSetBuilder
+from lockss.turtles.plugin_set import AntPluginSetBuilder, MavenPluginSetBuilder, PluginSet, PluginSetBuilder, PluginSetBuilderType
+
+
+ROOT: Path = Path('.').absolute()
 
 
 class TestPluginSet(PydanticTestCase):
@@ -46,17 +51,27 @@ class TestPluginSet(PydanticTestCase):
         PluginSet(kind='PluginSet', id='myset', name='My Set', builder=AntPluginSetBuilder(type='ant'))
         PluginSet(kind='PluginSet', id='myset', name='My Set', builder=MavenPluginSetBuilder(type='maven'))
 
+
 class TestPluginSetBuilder(PydanticTestCase):
 
-    def doTestPluginSetBuilder(self, Pbsc: type(PluginSetBuilder), typ: str, def_main: str, def_test: str) -> None:
+    def doTestPluginSetBuilder(self, Pbsc: type(PluginSetBuilder), typ: PluginSetBuilderType, def_main: Path, def_test: Path) -> None:
         self.assertPydanticMissing(lambda: Pbsc(), 'type')
         self.assertPydanticLiteralError(lambda: Pbsc(type='BADTYPE'), 'type', typ)
         self.assertIsNone(Pbsc(type=typ)._root)
-        self.assertEqual(Pbsc(type=typ)._get_main(), def_main)
-        self.assertEqual(Pbsc(type=typ, main='mymain')._get_main(), 'mymain')
-        self.assertEqual(Pbsc(type=typ)._get_test(), def_test)
-        self.assertEqual(Pbsc(type=typ, test='mytest')._get_test(), 'mytest')
+        with self.assertRaises(ValueError):
+            Pbsc(type=typ).get_root()
+        self.assertEqual(Pbsc(type=typ).initialize(ROOT).get_root(), ROOT)
+        with self.assertRaises(ValueError):
+            Pbsc(type=typ, main='anything').get_main()
+        self.assertEqual(Pbsc(type=typ).initialize(ROOT).get_main(), def_main)
+        self.assertEqual(Pbsc(type=typ, main='mymain').initialize(ROOT).get_main(), ROOT.joinpath('mymain'))
+        self.assertEqual(Pbsc(type=typ, main='/opt/main').initialize(ROOT).get_main(), Path('/opt/main'))
+        with self.assertRaises(ValueError):
+            Pbsc(type=typ, test='anything').get_test()
+        self.assertEqual(Pbsc(type=typ).initialize(ROOT).get_test(), def_test)
+        self.assertEqual(Pbsc(type=typ, test='mytest').initialize(ROOT).get_test(), ROOT.joinpath('mytest'))
+        self.assertEqual(Pbsc(type=typ, test='/opt/test').initialize(ROOT).get_test(), Path('/opt/test'))
 
     def testPluginSetBuilder(self):
-        self.doTestPluginSetBuilder(AntPluginSetBuilder, 'ant', 'plugins/src', 'plugins/test/src')
-        self.doTestPluginSetBuilder(MavenPluginSetBuilder, 'maven', 'src/main/java', 'src/test/java')
+        self.doTestPluginSetBuilder(AntPluginSetBuilder, 'ant', ROOT.joinpath('plugins/src'), ROOT.joinpath('plugins/test/src'))
+        self.doTestPluginSetBuilder(MavenPluginSetBuilder, 'maven', ROOT.joinpath('src/main/java'), ROOT.joinpath('src/test/java'))
