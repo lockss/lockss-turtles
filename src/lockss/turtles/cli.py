@@ -33,6 +33,7 @@ Tool for managing LOCKSS plugin sets and LOCKSS plugin registries
 """
 
 from getpass import getpass
+from itertools import chain
 from pathlib import Path
 
 from exceptiongroup import ExceptionGroup
@@ -97,9 +98,9 @@ class PluginDeploymentOptions(BaseModel):
         raise FileNotFoundError(file_or(TurtlesApp.default_plugin_set_catalog_choices()))
 
     def get_plugin_registry_layers(self) -> list[PluginRegistryLayerIdentifier]:
-        ret = [*(self.plugin_registry_layer or []), *[file_lines(file_path) for file_path in self.plugin_registry_layers or []]]
+        ret = [*(self.plugin_registry_layer or []), *chain.from_iterable(file_lines(file_path) for file_path in self.plugin_registry_layers or [])]
         for layer in reversed(['testing', 'production']):
-            if getattr(self, layer, False):
+            if getattr(self, layer, False) and layer not in ret:
                 ret.insert(0, layer)
         if ret:
             return ret
