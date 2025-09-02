@@ -119,7 +119,7 @@ class PluginIdentifierOptions(BaseModel):
         return path(v)
 
     def get_plugin_identifiers(self) -> list[str]:
-        ret = [*(self.plugin_identifier or []), *[file_lines(file_path) for file_path in self.plugin_identifiers or []]]
+        ret = [*(self.plugin_identifier or []), *chain.from_iterable(file_lines(file_path) for file_path in self.plugin_identifiers or [])]
         if ret:
             return ret
         raise ValueError('Empty list of plugin identifiers')
@@ -137,7 +137,7 @@ class PluginJarOptions(BaseModel):
         return path(v)
 
     def get_plugin_jars(self):
-        ret = [*(self.plugin_jar or []), *[file_lines(file_path) for file_path in self.plugin_jars or []]]
+        ret = [*(self.plugin_jar or []), *chain.from_iterable(file_lines(file_path) for file_path in self.plugin_jars or [])]
         if len(ret):
             return ret
         raise ValueError('Empty list of plugin JARs')
@@ -161,7 +161,7 @@ class ReleasePluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDep
 
 class TurtlesCommand(BaseModel):
     bp: Optional[BuildPluginCommand] = Field(description='synonym for: build-plugin')
-    build_plugin: Optional[BuildPluginCommand] = Field(description='build (package and sign) plugins', alias='build-plugin')
+    build_plugin: Optional[BuildPluginCommand] = Field(description='build plugins', alias='build-plugin')
     copyright: Optional[StringCommand.type(__copyright__)] = Field(description=COPYRIGHT_DESCRIPTION)
     deploy_plugin: Optional[DeployPluginCommand] = Field(description='deploy plugins', alias='deploy-plugin')
     dp: Optional[DeployPluginCommand] = Field(description='synonym for: deploy-plugin')
