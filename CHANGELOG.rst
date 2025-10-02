@@ -8,33 +8,84 @@ Release Notes
 
 Released: ?
 
+*  **Changes**
+
+   *  The configuration directory for Turtles in ``$XDG_CONFIG_HOME`` (by default ``$HOME/.config`` which is typically ``/home/$USER/.config``), ``/usr/local/share``, and ``/etc`` is now called ``lockss-turtles`` instead of ``lockss.turtles``.
+
+   *  Some long options have been renamed (the corresponding short options remain unchanged):
+
+      .. list-table::
+         :header-rows: 1
+
+         *  *  Short option
+            *  Long option, version 0.5.0
+            *  Long option, version 0.6.0
+         *  *  ``-i``
+            *  ``--identifier``
+            *  ``--plugin-identifier``
+         *  *  ``-I``
+            *  ``--identifiers``
+            *  ``--plugin-identifiers``
+         *  *  ``-j``
+            *  ``--jar``
+            *  ``--plugin-jar``
+         *  *  ``-J``
+            *  ``--jars``
+            *  ``--plugin-jars``
+         *  *  ``-l``
+            *  ``--layer``
+            *  ``--plugin-registry-layer``
+         *  *  ``-L``
+            *  ``--layers``
+            *  ``--plugin-registry-layers``
+         *  *  n/a
+            *  ``--password``
+            *  ``--plugin-signing-password``
+
+   *  Some short options have been renamed (the corresponding long options remain unchanged):
+
+      .. list-table::
+         :header-rows: 1
+
+         *  *  Long option
+            *  Short option, version 0.5.0
+            *  Short option, version 0.6.0
+         *  *  ``--plugin-registry-catalog``
+            *  ``-r``
+            *  ``-R``
+         *  *  ``--plugin-set-catalog``
+            *  ``-s``
+            *  ``-S``
+
+   *  Bare arguments are no longer allowed and treated as plugin identifiers or plugin JARs; all plugin identifiers must be specified via ``--plugin-identifier/-i`` or ``--plugin-identifiers/-I`` options and all plugin JARS via ``--plugin-jar/-j`` or ``--plugin-jars/-J`` options.
+
+   *  The ``usage`` command has been removed.
+
 *  **Features**
+
+   *  New options have been added:
+
+      .. list-table::
+         :header-rows: 1
+
+         *  *  Long option
+            *  Short option
+         *  *  ``--plugin-registry``
+            *  ``-r``
+         *  *  ``--plugin-set``
+            *  ``-s``
+
+   *  Options that read YAML files no longer expect each file to contain a single YAML configuration object, which must be of the kind they target; they now read all YAML configuration objects in each file, loading all the ones with the right kind and ignoring all the others with the other kinds. This applies to existing options ``--plugin-registry-catalog``/``-R`` and ``--plugin-set-catalog``/``-S``, and new options ``--plugin-registry``/``-r`` and ``--plugin-set``/``-s``.
+
+   *  In YAML files, values that are paths can now all be either relative with respect to the enclosing file or absolute.
+
+   *  Now using Pydantic for configuration objects instead of maintaining JSON Schema instances.
 
    *  Now using type hinting throughout.
 
    *  Now using *lockss-pybasic* and *pydantic-argparse* internally.
 
-*  **Changes**
-
-   *  The configuration directory for Turtles in ``$XDG_CONFIG_HOME`` (by default ``$HOME/.config``), ``/usr/local/share``, and ``/etc`` is now called ``lockss-turtles`` instead of ``lockss.turtles``.
-
-   *  Some long options have been renamed (the short options remain unchanged):
-
-      ============ ================= =============
-      Short option Version 0.5.0     Version 0.6.0
-      ============ ================= =============
-      ``-i``       ``--identifier``  ``--plugin-identifier``
-      ``-I``       ``--identifiers`` ``--plugin-identifiers``
-      ``-j``       ``--jar``         ``--plugin-jar``
-      ``-J``       ``--jars``        ``--plugin-jars``
-      ``-l``       ``--layer``       ``--plugin-registry-layer``
-      ``-L``       ``--layers``      ``--plugin-registry-layers``
-      n/a          ``--password``    ``--plugin-signing-password``
-      ============ ================= =============
-
-   *  Bare arguments are no longer allowed and treated as plugin identifiers or plugin JARs; all plugin identifiers must be specified via ``--plugin-identifier/-i`` or ``--plugin-identifiers/-I`` options and all plugin JARS via ``--plugin-jar/-j`` or ``--plugin-jars/-J`` options.
-
-   *  The ``usage`` command has been removed.
+   *  `Turtles documentation <https://docs.lockss.org/en/latest/software/turtles>`_ is now on the `LOCKSS Documentation Portal <https://docs.lockss.org/>`_.
 
 -----
 0.5.0

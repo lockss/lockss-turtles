@@ -28,6 +28,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+"""
+Utilities for the ``lockss.turtles`` package.
+"""
+
 # Remove in Python 3.14
 # See https://stackoverflow.com/questions/33533148/how-do-i-type-hint-a-method-with-the-type-of-the-enclosing-class/33533514#33533514
 from __future__ import annotations
@@ -40,25 +44,62 @@ from lockss.pybasic.fileutil import path
 from pydantic import BaseModel
 
 
-# Candidate for lockss-pybasic
+#: Type alias for the union of ``Path`` and ``str``.
 PathOrStr = Union[Path, str]
 
 
 class BaseModelWithRoot(BaseModel):
+    """
+    A Pydantic model with a root path which can be used to resolve relative
+    paths.
+    """
+
+    #: An internal root path.
     _root: Optional[Path]
 
     def model_post_init(self, context: Any) -> None:
+        """
+        Pydantic post-initialization method to create the ``_root`` field.
+        """
         self._root = None
 
     def get_root(self) -> Path:
+        """
+        Returns this object's root path.
+
+        See ``initialize``.
+
+        :return: This object's root path.
+        :rtype: Path
+        :raises ValueError: If this object's ``initialize`` method was not
+                            called.
+        """
         if self._root is None:
             raise ValueError('Uninitialized root')
         return self._root
 
-    def initialize(self, root: PathOrStr) -> BaseModelWithRoot:
-        self._root = path(root)
+    def initialize(self,
+                   root_path_or_str: PathOrStr) -> BaseModelWithRoot:
+        """
+        Mandatory initialization of the root path.
+
+        :param root_path_or_str: This object's root path.
+        :type root_path_or_str: PathOrStr
+        :return: This object, for chaining.
+        :rtype: BaseModelWithRoot
+        """
+        self._root = path(root_path_or_str)
         return self
 
 
 def file_or(paths: Iterable[Path]) -> str:
+    """
+    Turns an iterable of file paths into a ``" or "``-separated string suitable
+    for CLI messages.
+
+    :param paths: A non-null list of file paths.
+    :type paths: Iterable[Path]
+    :return: A ``" or "``-separated string of the given file paths.
+    :rtype: str
+    """
     return ' or '.join(map(str, paths))

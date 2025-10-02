@@ -74,7 +74,7 @@ class TurtlesApp(object):
 
     ETC_CONFIG_DIR: ClassVar[Path] = Path('/etc', CONFIG_DIR_NAME)
 
-    CONFIG_DIRS: ClassVar[tuple[Path, ...]] = (XDG_CONFIG_DIR, USR_CONFIG_DIR, ETC_CONFIG_DIR)
+    CONFIG_DIRS: ClassVar[tuple[Path, ...]] = (XDG_CONFIG_DIR, ETC_CONFIG_DIR, USR_CONFIG_DIR)
 
     PLUGIN_REGISTRY_CATALOG: ClassVar[str] = 'plugin-registry-catalog.yaml'
 

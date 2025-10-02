@@ -5,12 +5,15 @@ Library and command line tool to manage LOCKSS plugin sets and LOCKSS plugin
 registries.
 """
 
-__version__ = '0.6.0-dev19'
+#: This package's version.
+__version__ = '0.6.0-dev23'
 
+#: This package's copyright.
 __copyright__ = '''
 Copyright (c) 2000-2025, Board of Trustees of Leland Stanford Jr. University
 '''.strip()
 
+#: This package's license.
 __license__ = __copyright__ + '\n\n' + '''
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:

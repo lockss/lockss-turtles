@@ -52,10 +52,10 @@ from .util import file_or
 
 
 class PluginBuildingOptions(BaseModel):
-    plugin_set: Optional[list[FilePath]] = Field(aliases=['-s'], description=f'(plugin sets) add one or more plugin set definition files to the loaded plugin sets')
-    plugin_set_catalog: Optional[list[FilePath]] = Field(aliases=['-S'], description=f'(plugin sets) add one or more plugin set catalogs to the loaded plugin set catalogs; if no plugin set catalogs or plugin sets are specified, load {file_or(TurtlesApp.default_plugin_set_catalog_choices())}')
-    plugin_signing_credentials: Optional[FilePath] = Field(aliases=['-c'], description=f'(plugin signing credentials) load the plugin signing credentials from the given file, or if none, from {file_or(TurtlesApp.default_plugin_signing_credentials_choices())}')
-    plugin_signing_password: Optional[str] = Field(description='(plugin signing credentials) set the plugin signing password, or if none, prompt interactively')
+    plugin_set: Optional[list[FilePath]] = Field(aliases=['-s'], title='Plugin Sets', description=f'(plugin sets) add one or more plugin set definition files to the loaded plugin sets')
+    plugin_set_catalog: Optional[list[FilePath]] = Field(aliases=['-S'], title='Plugin Set Catalogs', description=f'(plugin sets) add one or more plugin set catalogs to the loaded plugin set catalogs; if no plugin set catalogs or plugin sets are specified, load {file_or(TurtlesApp.default_plugin_set_catalog_choices())}')
+    plugin_signing_credentials: Optional[FilePath] = Field(aliases=['-c'], title='Plugin Signing Credentials', description=f'(plugin signing credentials) load the plugin signing credentials from the given file, or if none, from {file_or(TurtlesApp.default_plugin_signing_credentials_choices())}')
+    plugin_signing_password: Optional[str] = Field(title='Plugin Signing Password', description='(plugin signing credentials) set the plugin signing password, or if none, prompt interactively')
 
     def get_plugin_sets(self) -> list[Path]:
         return [path(p) for p in self.plugin_set or []]
@@ -144,22 +144,18 @@ class PluginJarOptions(BaseModel):
 
 
 class NonInteractiveOptions(BaseModel):
-    non_interactive: Optional[bool] = Field(False, description='(plugin signing credentials) disallow interactive prompts')
-
-
-class BuildPluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginBuildingOptions, PluginIdentifierOptions):
-    pass
-
-
-class DeployPluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDeploymentOptions, PluginJarOptions):
-    pass
-
-
-class ReleasePluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDeploymentOptions, PluginBuildingOptions, PluginIdentifierOptions):
-    pass
+    non_interactive: Optional[bool] = Field(False,
+                                            description='(plugin signing credentials) disallow interactive prompts')
 
 
 class TurtlesCommand(BaseModel):
+
+    class BuildPluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginBuildingOptions, PluginIdentifierOptions): pass
+
+    class DeployPluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDeploymentOptions, PluginJarOptions): pass
+
+    class ReleasePluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDeploymentOptions, PluginBuildingOptions, PluginIdentifierOptions): pass
+
     bp: Optional[BuildPluginCommand] = Field(description='synonym for: build-plugin')
     build_plugin: Optional[BuildPluginCommand] = Field(description='build plugins', alias='build-plugin')
     copyright: Optional[StringCommand.type(__copyright__)] = Field(description=COPYRIGHT_DESCRIPTION)
@@ -237,10 +233,10 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
     #     if len(result) > 0:
     #         self._tabulate(title, result, headers)
 
-    def _bp(self, build_plugin_command: BuildPluginCommand) -> None:
+    def _bp(self, build_plugin_command: TurtlesCommand.BuildPluginCommand) -> None:
         return self._build_plugin(build_plugin_command)
 
-    def _build_plugin(self, build_plugin_command: BuildPluginCommand) -> None:
+    def _build_plugin(self, build_plugin_command: TurtlesCommand.BuildPluginCommand) -> None:
         errs = []
         for psc in build_plugin_command.get_plugin_set_catalogs():
             try:
@@ -276,7 +272,7 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
     def _copyright(self, string_command: StringCommand) -> None:
         self._do_string_command(string_command)
 
-    def _deploy_plugin(self, deploy_plugin_command: DeployPluginCommand) -> None:
+    def _deploy_plugin(self, deploy_plugin_command: TurtlesCommand.DeployPluginCommand) -> None:
         errs = []
         for prc in deploy_plugin_command.get_plugin_registry_catalogs():
             try:
@@ -307,7 +303,7 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
     def _do_string_command(self, string_command: StringCommand) -> None:
         string_command()
 
-    def _dp(self, deploy_plugin_command: DeployPluginCommand) -> None:
+    def _dp(self, deploy_plugin_command: TurtlesCommand.DeployPluginCommand) -> None:
         return self._deploy_plugin(deploy_plugin_command)
 
     def _license(self, string_command: StringCommand) -> None:
@@ -322,7 +318,7 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
             self._parser.error('no plugin signing password specified while in non-interactive mode')
         self._app.set_password(lambda: _p)
 
-    def _release_plugin(self, release_plugin_command: ReleasePluginCommand) -> None:
+    def _release_plugin(self, release_plugin_command: TurtlesCommand.ReleasePluginCommand) -> None:
         errs = []
         for psc in release_plugin_command.get_plugin_set_catalogs():
             try:
@@ -371,7 +367,7 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
                                 headers=['Plugin identifier', 'Plugin version', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
                                 tablefmt=release_plugin_command.output_format))
 
-    def _rp(self, release_plugin_command: ReleasePluginCommand) -> None:
+    def _rp(self, release_plugin_command: TurtlesCommand.ReleasePluginCommand) -> None:
         self._release_plugin(release_plugin_command)
 
     def _version(self, string_command: StringCommand) -> None:
