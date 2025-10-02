@@ -44,14 +44,14 @@ files = [
 
 [[package]]
 name = "lockss-pybasic"
-version = "0.1.0"
+version = "0.1.1"
 description = "Basic Python utilities"
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
 files = [
-    {file = "lockss_pybasic-0.1.0-py3-none-any.whl", hash = "sha256:d012dfe4358253b60cb44348f84f5bd57d6ca5a2b3013522c8328eaafcd1df47"},
-    {file = "lockss_pybasic-0.1.0.tar.gz", hash = "sha256:5fef3bf200f49bb85d8926c5f092e03b509240550ad3913cc987c466fb23388b"},
+    {file = "lockss_pybasic-0.1.1-py3-none-any.whl", hash = "sha256:63103d82ff7296146df96a3798326fba10061f3261179b48ff7d5c6a1e12421e"},
+    {file = "lockss_pybasic-0.1.1.tar.gz", hash = "sha256:b62951e3da1a557b4ea97715f275b1ab03f8b90a9c1162c866c4b33b21a446a4"},
 ]
 
 [package.dependencies]
@@ -435,4 +435,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9,<4.0"
-content-hash = "a24a0fa3e4a4a7b13d5da5897add72cfc5b7688c1fdf7cf65c83bbab98f8d334"
+content-hash = "45b7bec26c1439621817c113bf5c25608491a6c042047acc9466d7eed5f9ed95"
