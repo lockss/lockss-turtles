@@ -30,28 +30,71 @@
 
 from pathlib import Path
 
-from . import PydanticTestCase
-from lockss.turtles.plugin_set import AntPluginSetBuilder, MavenPluginSetBuilder, PluginSet, PluginSetBuilder, PluginSetBuilderType
+from . import PydanticTestCase, ROOT
+from lockss.turtles.plugin_set import AntPluginSetBuilder, MavenPluginSetBuilder, PluginSet, PluginSetBuilder, PluginSetBuilderType, PluginSetCatalog
 
 
-ROOT: Path = Path('.').absolute()
+class TestPluginSetCatalog(PydanticTestCase):
+
+    def test_missing_kind(self):
+        self.assertPydanticMissing(lambda: PluginSetCatalog(),
+                                   'kind')
+
+    def test_null_kind(self):
+        self.assertPydanticLiteralError(lambda: PluginSetCatalog(kind=None),
+                                        'kind',
+                                        'PluginSetCatalog')
+
+    def test_wrong_kind(self):
+        self.assertPydanticLiteralError(lambda: PluginSetCatalog(kind='WrongKind'),
+                                        'kind',
+                                        'PluginSetCatalog')
+
+    def test_missing_plugin_registry_files(self):
+        self.assertPydanticMissing(lambda: PluginSetCatalog(),
+                                   'plugin-set-files')
+
+    def test_null_plugin_registry_files(self):
+        self.assertPydanticListType(lambda: PluginSetCatalog(**{'plugin-set-files': None}),
+                                    'plugin-set-files')
+
+    def test_empty_plugin_registry_files(self):
+        self.assertPydanticTooShort(lambda: PluginSetCatalog(**{'plugin-set-files': []}),
+                                    'plugin-set-files')
+
+    def test_uninitialized(self):
+        psc = PluginSetCatalog(**{'kind': 'PluginSetCatalog',
+                                  'plugin-set-files': ['whatever']})
+        self.assertRaises(ValueError, lambda: psc.get_root())
+        self.assertRaises(ValueError, lambda: psc.get_plugin_set_files())
+
+    def test_absolute_path(self):
+        psc = PluginSetCatalog(**{'kind': 'PluginSetCatalog',
+                                  'plugin-set-files': ['/tmp/one.yaml']}).initialize(ROOT)
+        self.assertEqual(len(psf := psc.get_plugin_set_files()), 1)
+        self.assertEqual(psf[0], Path('/tmp/one.yaml'))
+
+    def test_relative_path(self):
+        psc = PluginSetCatalog(**{'kind': 'PluginSetCatalog',
+                                  'plugin-set-files': ['one.yaml']}).initialize(ROOT)
+        self.assertEqual(len(psf := psc.get_plugin_set_files()), 1)
+        self.assertEqual(psf[0], ROOT.joinpath('one.yaml'))
 
 
+# FIXME
 class TestPluginSet(PydanticTestCase):
-
-    def setUp(self):
-        pass
 
     def testPluginSet(self):
         self.assertPydanticMissing(lambda: PluginSet(), 'kind')
         self.assertPydanticLiteralError(lambda: PluginSet(kind='WrongKind'), 'kind', 'PluginSet')
         self.assertPydanticMissing(lambda: PluginSet(kind='PluginSet'), 'id')
-        self.assertPydanticMissing(lambda: PluginSet(kind='PluginSet', id='myid'), 'name')
+        self.assertPydanticMissing(lambda: PluginSet(kind='PluginSet', id='myset'), 'name')
         self.assertPydanticMissing(lambda: PluginSet(kind='PluginSet', id='myset', name='My Set'), 'builder')
         PluginSet(kind='PluginSet', id='myset', name='My Set', builder=AntPluginSetBuilder(type='ant'))
         PluginSet(kind='PluginSet', id='myset', name='My Set', builder=MavenPluginSetBuilder(type='maven'))
 
 
+# FIXME
 class TestPluginSetBuilder(PydanticTestCase):
 
     def doTestPluginSetBuilder(self, Pbsc: type(PluginSetBuilder), typ: PluginSetBuilderType, def_main: Path, def_test: Path) -> None:

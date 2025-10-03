@@ -29,10 +29,14 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from collections.abc import Callable
+from pathlib import Path
 from pydantic import ValidationError
 from pydantic_core import ErrorDetails
 from typing import Any, Optional, Tuple, Union
 from unittest import TestCase
+
+
+ROOT: Path = Path('.').absolute()
 
 
 Loc = Union[Tuple[str], str]
@@ -40,26 +44,63 @@ Loc = Union[Tuple[str], str]
 
 class PydanticTestCase(TestCase):
 
+    def assertPydanticListType(self, func: Callable[[], Any], loc_tuple_or_str: Loc, msg=None) -> None:
+        self._assertPydanticValidationError(func,
+                                            lambda e: e.get('type') == 'list_type' \
+                                                      and e.get('loc') == self._loc(loc_tuple_or_str),
+                                            msg=msg)
+
+    def assertPydanticLiteralError(self, func: Callable[[], Any], loc_tuple_or_str: Loc, expected: Union[Tuple[str], str], msg=None) -> None:
+        if isinstance(expected, str):
+            exp = f"'{expected}'"
+        elif len(expected) == 0:
+            raise RuntimeError(f"'expected' cannot be an empty tuple")
+        elif len(expected) == 1:
+            exp = f"'{expected[0]}'"
+        else:
+            exp = f'''{", ".join(f"'{e}'" for e in expected[:-1])} or '{expected[-1]}\''''
+        self._assertPydanticValidationError(func,
+                                            lambda e: e.get('type') == 'literal_error' \
+                                                      and e.get('loc') == self._loc(loc_tuple_or_str) \
+                                                      and (ctx := e.get('ctx')) \
+                                                      and ctx.get('expected') == exp,
+                                            msg=msg)
+
+    def assertPydanticModelAttributesType(self, func: Callable[[], Any], loc_tuple_or_str: Loc, msg=None) -> None:
+        self._assertPydanticValidationError(func,
+                                            lambda e: e.get('type') == 'model_attributes_type' \
+                                                      and e.get('loc') == self._loc(loc_tuple_or_str),
+                                            msg=msg)
+
+    def assertPydanticMissing(self, func: Callable[[], Any], loc_tuple_or_str: Loc, msg=None) -> None:
+        self._assertPydanticValidationError(func,
+                                            lambda e: e.get('type') == 'missing' \
+                                                      and e.get('loc') == self._loc(loc_tuple_or_str),
+                                            msg=msg)
+
+    def assertPydanticStringType(self, func: Callable[[], Any], loc_tuple_or_str: Loc, msg=None) -> None:
+        self._assertPydanticValidationError(func,
+                                            lambda e: e.get('type') == 'string_type' \
+                                                      and e.get('loc') == self._loc(loc_tuple_or_str),
+                                            msg=msg)
+
+    def assertPydanticTooShort(self, func: Callable[[], Any], loc_tuple_or_str: Loc, msg=None) -> None:
+        self._assertPydanticValidationError(func,
+                                            lambda e: e.get('type') == 'too_short' \
+                                                      and e.get('loc') == self._loc(loc_tuple_or_str),
+                                            msg=msg)
+
     def _assertPydanticValidationError(self,
                                        func: Callable[[], Any],
                                        matcher: Callable[[ErrorDetails], bool],
-                                       msg: Optional[str]=None):
+                                       msg: Optional[str]=None) -> None:
         with self.assertRaises(ValidationError) as cm:
             func()
-            self.fail('Expected ValidationError but did not get one')
-        self.assertIsInstance(cm.exception, ValidationError)
         ve: ValidationError = cm.exception
         for e in ve.errors():
             if matcher(e):
                 return
         self.fail(msg or f'Did not get a matching ValidationError; got:\n{"\n".join([str(e) for e in ve.errors()])}\n{ve!s}')
 
-    def assertPydanticMissing(self, func: Callable[[], Any], loc: Loc, msg=None) -> None:
-        if isinstance(loc, str):
-            loc = (loc,)
-        self._assertPydanticValidationError(func, lambda e: e.get('type') == 'missing' and e.get('loc') == loc)
-
-    def assertPydanticLiteralError(self, func: Callable[[], Any], loc: Loc, expected: str, msg=None) -> None:
-        if isinstance(loc, str):
-            loc = (loc,)
-        self._assertPydanticValidationError(func, lambda e: e.get('type') == 'literal_error' and e.get('loc') == loc and (ctx := e.get('ctx')) and ctx.get('expected') == repr(expected))
+    def _loc(self, loc_tuple_or_str: Loc) -> tuple[str]:
+        return (loc_tuple_or_str,) if isinstance(loc_tuple_or_str, str) else loc_tuple_or_str

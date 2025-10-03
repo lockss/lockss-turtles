@@ -318,8 +318,8 @@ class DirectoryPluginRegistryLayout(BasePluginRegistryLayout):
     type: Literal['directory'] = Field(**BasePluginRegistryLayout.TYPE_FIELD)
 
     #: This plugin registry layout's file naming convention.
-    file_naming_convention: Optional[PluginRegistryLayoutFileNamingConvention] = Field(BasePluginRegistryLayout.FILE_NAMING_CONVENTION_DEFAULT,
-                                                                                       **BasePluginRegistryLayout.FILE_NAMING_CONVENTION_FIELD)
+    file_naming_convention: PluginRegistryLayoutFileNamingConvention = Field(BasePluginRegistryLayout.FILE_NAMING_CONVENTION_DEFAULT,
+                                                                             **BasePluginRegistryLayout.FILE_NAMING_CONVENTION_FIELD)
 
     def _copy_jar(self,
                   src_path: Path,
@@ -478,7 +478,7 @@ class PluginRegistryLayer(BaseModel):
         :return: This plugin registry layer's path.
         :rtype: Path
         """
-        return path(self.path)
+        return self.get_plugin_registry().get_root().joinpath(self.path)
 
     def get_plugin_registry(self) -> PluginRegistry:
         """
