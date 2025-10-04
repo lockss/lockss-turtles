@@ -234,12 +234,12 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
     type: Literal['maven'] = Field(**BasePluginSetBuilder.TYPE_FIELD)
 
     #: This plugin set builder's main code path.
-    main: Optional[str] = Field(DEFAULT_MAIN,
-                                **BasePluginSetBuilder.MAIN_FIELD)
+    main: str = Field(DEFAULT_MAIN,
+                      **BasePluginSetBuilder.MAIN_FIELD)
 
     #: This plugin set builder's unit test path.
-    test: Optional[str] = Field(DEFAULT_TEST,
-                                **BasePluginSetBuilder.TEST_FIELD)
+    test: str = Field(DEFAULT_TEST,
+                      **BasePluginSetBuilder.TEST_FIELD)
 
     #: An internal flag to remember if a build has occurred.
     _built: bool
@@ -363,12 +363,12 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
     type: Literal['ant'] = Field(**BasePluginSetBuilder.TYPE_FIELD)
 
     #: This plugin set builder's main code path.
-    main: Optional[str] = Field(DEFAULT_MAIN,
-                                **BasePluginSetBuilder.MAIN_FIELD)
+    main: str = Field(DEFAULT_MAIN,
+                      **BasePluginSetBuilder.MAIN_FIELD)
 
     #: This plugin set builder's unit test path.
-    test: Optional[str] = Field(DEFAULT_TEST,
-                                **BasePluginSetBuilder.TEST_FIELD)
+    test: str = Field(DEFAULT_TEST,
+                      **BasePluginSetBuilder.TEST_FIELD)
 
     #: An internal flag to remember if a build has occurred.
     _built: bool

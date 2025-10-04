@@ -42,6 +42,17 @@ from . import PydanticTestCase, ROOT
 
 class TestPluginRegistryCatalog(PydanticTestCase):
 
+    def setUp(self) -> None:
+        super().setUp()
+        self.valid_absolute = PluginRegistryCatalog(**{'kind': 'PluginRegistryCatalog',
+                                                       'plugin-registry-files': [
+                                                           '/tmp/one.yaml',
+                                                       ]}).initialize(ROOT)
+        self.valid_relative = PluginRegistryCatalog(**{'kind': 'PluginRegistryCatalog',
+                                                       'plugin-registry-files': [
+                                                           'one.yaml',
+                                                       ]}).initialize(ROOT)
+
     def test_missing_kind(self) -> None:
         self.assertPydanticMissing(lambda: PluginRegistryCatalog(),
                                    'kind')
@@ -74,21 +85,28 @@ class TestPluginRegistryCatalog(PydanticTestCase):
         self.assertRaises(ValueError, lambda: prc.get_root())
         self.assertRaises(ValueError, lambda: prc.get_plugin_registry_files())
 
-    def test_absolute_path(self) -> None:
-        prc = PluginRegistryCatalog(**{'kind': 'PluginRegistryCatalog',
-                                       'plugin-registry-files': ['/tmp/one.yaml']}).initialize(ROOT)
-        self.assertEqual(len(prf := prc.get_plugin_registry_files()), 1)
-        self.assertEqual(prf[0], Path('/tmp/one.yaml'))
+    def test_kind(self) -> None:
+        self.assertEqual(self.valid_absolute.kind, 'PluginRegistryCatalog')
+        self.assertEqual(self.valid_relative.kind, 'PluginRegistryCatalog')
 
-    def test_relative_path(self) -> None:
-        prc = PluginRegistryCatalog(**{'kind': 'PluginRegistryCatalog',
-                                       'plugin-registry-files': ['one.yaml']}).initialize(ROOT)
-        self.assertEqual(len(prf := prc.get_plugin_registry_files()), 1)
-        self.assertEqual(prf[0], ROOT.joinpath('one.yaml'))
+    def test_get_plugin_registry_files(self) -> None:
+        self.assertListEqual(self.valid_absolute.get_plugin_registry_files(),
+                             [Path('/tmp/one.yaml')])
+        self.assertListEqual(self.valid_relative.get_plugin_registry_files(),
+                             [ROOT.joinpath('one.yaml')])
 
 
 # Important: see "del _BasePluginRegistryLayoutTestCase" at the end
 class _BasePluginRegistryLayoutTestCase(ABC, PydanticTestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.valid_identifier = self.instance(**{'type': self.type(),
+                                                 'file-naming-convention': 'identifier'})
+        self.valid_abbreviated = self.instance(**{'type': self.type(),
+                                                  'file-naming-convention': 'abbreviated'})
+        self.valid_underscore = self.instance(**{'type': self.type(),
+                                                 'file-naming-convention': 'underscore'})
 
     @abstractmethod
     def instance(self, **kwargs) -> BasePluginRegistryLayout:
@@ -112,9 +130,13 @@ class _BasePluginRegistryLayoutTestCase(ABC, PydanticTestCase):
                                        'type',
                                         self.type())
 
-    def test_missing_file_naming_convention(self) -> None:
+    def test_file_naming_conventions(self) -> None:
+        self.assertTupleEqual(('abbreviated', 'identifier', 'underscore'),
+                              PluginRegistryLayoutFileNamingConvention.__args__)
+
+    def test_default_file_naming_convention(self) -> None:
         self.assertEqual(self.instance(type=self.type()).get_file_naming_convention(),
-                         BasePluginRegistryLayout.FILE_NAMING_CONVENTION_DEFAULT)
+                         'identifier')
 
     def test_null_file_naming_convention(self) -> None:
         self.assertPydanticLiteralError(lambda: self.instance(**{'file-naming-convention': None}),
@@ -126,24 +148,24 @@ class _BasePluginRegistryLayoutTestCase(ABC, PydanticTestCase):
                                        'file-naming-convention',
                                         PluginRegistryLayoutFileNamingConvention.__args__)
 
-    def test_file_naming_conventions(self) -> None:
-        self.assertTupleEqual(('abbreviated', 'identifier', 'underscore'),
-                              PluginRegistryLayoutFileNamingConvention.__args__)
+    def test_get_type(self) -> None:
+        self.assertEqual(self.valid_identifier.get_type(), self.type())
+        self.assertEqual(self.valid_abbreviated.get_type(), self.type())
+        self.assertEqual(self.valid_underscore.get_type(), self.type())
+
+    def test_get_file_naming_convention(self) -> None:
+        self.assertEqual(self.valid_identifier.get_file_naming_convention(), 'identifier')
+        self.assertEqual(self.valid_abbreviated.get_file_naming_convention(), 'abbreviated')
+        self.assertEqual(self.valid_underscore.get_file_naming_convention(), 'underscore')
 
     def test_get_dstfile(self) -> None:
-        for fnc in PluginRegistryLayoutFileNamingConvention.__args__:
-            bprl = self.instance(**{'type': self.type(),
-                                    'file-naming-convention': fnc})
-            self.assertEqual(bprl.get_file_naming_convention(), fnc)
-            ret = getattr(bprl, '_get_dstfile')('org.myproject.plugin.MyPlugin')
-            if fnc == 'identifier':
-                self.assertEqual(ret, 'org.myproject.plugin.MyPlugin.jar')
-            elif fnc == 'abbreviated':
-                self.assertEqual(ret, 'MyPlugin.jar')
-            elif fnc == 'underscore':
-                self.assertEqual(ret, 'org_myproject_plugin_MyPlugin.jar')
-            else:
-                self.fail(f'Internal error: {fnc}')
+        plugid = 'org.myproject.plugin.MyPlugin'
+        self.assertEqual(getattr(self.valid_identifier, '_get_dstfile')(plugid),
+                         'org.myproject.plugin.MyPlugin.jar')
+        self.assertEqual(getattr(self.valid_abbreviated, '_get_dstfile')(plugid),
+                         'MyPlugin.jar')
+        self.assertEqual(getattr(self.valid_underscore, '_get_dstfile')(plugid),
+                         'org_myproject_plugin_MyPlugin.jar')
 
 
 class TestDirectoryPluginRegistryLayout(_BasePluginRegistryLayoutTestCase):
@@ -166,9 +188,19 @@ class TestRcsPluginRegistryLayout(_BasePluginRegistryLayoutTestCase):
 
 class TestPluginRegistryLayer(PydanticTestCase):
 
-    class _FakePluginRegistry:
-        def get_root(self) -> Path:
-            return ROOT
+    def setUp(self) -> None:
+        class _FakePluginRegistry:
+            def get_root(self) -> Path:
+                return ROOT
+
+        super().setUp()
+        self.fake_plugin_registry = _FakePluginRegistry()
+        self.valid_absolute = PluginRegistryLayer(id='mylayer',
+                                                  name='My Layer',
+                                                  path='/tmp/layerdir').initialize(self.fake_plugin_registry)
+        self.valid_relative = PluginRegistryLayer(id='mylayer',
+                                                  name='My Layer',
+                                                  path='layerdir').initialize(self.fake_plugin_registry)
 
     def test_missing_identifier(self) -> None:
         self.assertPydanticMissing(lambda: PluginRegistryLayer(),
@@ -201,20 +233,40 @@ class TestPluginRegistryLayer(PydanticTestCase):
         self.assertRaises(ValueError, lambda: prl.get_plugin_registry())
         self.assertRaises(ValueError, lambda: prl.get_path())
 
-    def test_absolute_path(self) -> None:
-        prl = PluginRegistryLayer(id='myid',
-                                  name='My Name',
-                                  path='/tmp/mydir').initialize(TestPluginRegistryLayer._FakePluginRegistry())
-        self.assertEqual(prl.get_path(), Path('/tmp/mydir'))
+    def test_get_id(self) -> None:
+        self.assertEqual(self.valid_absolute.get_id(), 'mylayer')
+        self.assertEqual(self.valid_relative.get_id(), 'mylayer')
 
-    def test_relative_path(self) -> None:
-        prl = PluginRegistryLayer(id='myid',
-                                  name='My Name',
-                                  path='mydir').initialize(TestPluginRegistryLayer._FakePluginRegistry())
-        self.assertEqual(prl.get_path(), ROOT.joinpath('mydir'))
+    def test_get_name(self) -> None:
+        self.assertEqual(self.valid_absolute.get_name(), 'My Layer')
+        self.assertEqual(self.valid_relative.get_name(), 'My Layer')
+
+    def test_get_path(self) -> None:
+        self.assertEqual(self.valid_absolute.get_path(), Path('/tmp/layerdir'))
+        self.assertEqual(self.valid_relative.get_path(), ROOT.joinpath('layerdir'))
 
 
 class TestPluginRegistry(PydanticTestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.valid_layout = DirectoryPluginRegistryLayout(type='directory')
+        self.valid_layer = PluginRegistryLayer(id='mylayer',
+                                               name='My Layer',
+                                               path='layerpath')
+        self.valid = PluginRegistry(**{'kind': 'PluginRegistry',
+                                       'id': 'myid',
+                                       'name': 'My Name',
+                                       'layout': self.valid_layout,
+                                       'layers': [
+                                           self.valid_layer
+                                       ],
+                                       'plugin-identifiers': [
+                                           'org.myproject.plugin.MyPlugin'
+                                       ],
+                                       'suppressed-plugin-identifiers': [
+                                           'org.myproject.plugin.BadPlugin'
+                                       ]}).initialize(ROOT)
 
     def test_missing_kind(self) -> None:
         self.assertPydanticMissing(lambda: PluginRegistry(),
@@ -270,7 +322,6 @@ class TestPluginRegistry(PydanticTestCase):
         self.assertPydanticMissing(lambda: PluginRegistry(),
                                    'plugin-identifiers')
 
-
     def test_null_plugin_identifiers(self) -> None:
         self.assertPydanticListType(lambda: PluginRegistry(**{'plugin-identifiers': None}),
                                     'plugin-identifiers')
@@ -278,6 +329,36 @@ class TestPluginRegistry(PydanticTestCase):
     def test_empty_plugin_identifiers(self) -> None:
         self.assertPydanticTooShort(lambda: PluginRegistry(**{'plugin-identifiers': []}),
                                     'plugin-identifiers')
+
+    def test_kind(self) -> None:
+        self.assertEqual(self.valid.kind, 'PluginRegistry')
+
+    def test_get_id(self) -> None:
+        self.assertEqual(self.valid.get_id(), 'myid')
+
+    def test_get_name(self) -> None:
+        self.assertEqual(self.valid.get_name(), 'My Name')
+
+    def test_get_layout(self) -> None:
+        self.assertEqual(self.valid.get_layout(), self.valid_layout)
+
+    def test_get_layers(self) -> None:
+        self.assertListEqual(self.valid.get_layers(), [self.valid_layer])
+
+    def test_get_layer(self) -> None:
+        self.assertEqual(self.valid.get_layer('mylayer'), self.valid_layer)
+        self.assertIsNone(self.valid.get_layer('invalidlayer'))
+
+    def test_get_layer_ids(self) -> None:
+        self.assertListEqual(self.valid.get_layer_ids(), ['mylayer'])
+
+    def test_get_plugin_identifiers(self) -> None:
+        self.assertListEqual(self.valid.get_plugin_identifiers(),
+                             ['org.myproject.plugin.MyPlugin'])
+
+    def test_get_suppressed_plugin_identifiers(self) -> None:
+        self.assertListEqual(self.valid.get_suppressed_plugin_identifiers(),
+                             ['org.myproject.plugin.BadPlugin'])
 
 
 #
