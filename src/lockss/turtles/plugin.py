@@ -29,11 +29,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-Library to represent a LOCKSS plugin.
+Module to represent a LOCKSS plugin.
 """
 
-# Remove in Python 3.14
-# See https://stackoverflow.com/questions/33533148/how-do-i-type-hint-a-method-with-the-type-of-the-enclosing-class/33533514#33533514
+# Remove in Python 3.14; see https://stackoverflow.com/a/33533514
 from __future__ import annotations
 
 from collections.abc import Callable

@@ -100,13 +100,19 @@ class TestPluginRegistryCatalog(PydanticTestCase):
 class _BasePluginRegistryLayoutTestCase(ABC, PydanticTestCase):
 
     def setUp(self) -> None:
+        class _FakePluginRegistry:
+            def get_root(self) -> Path:
+                return ROOT
+
         super().setUp()
+        self.fake_plugin_registry = _FakePluginRegistry()
         self.valid_identifier = self.instance(**{'type': self.type(),
-                                                 'file-naming-convention': 'identifier'})
+                                                 'file-naming-convention': 'identifier'}).initialize(self.fake_plugin_registry)
         self.valid_abbreviated = self.instance(**{'type': self.type(),
-                                                  'file-naming-convention': 'abbreviated'})
+                                                  'file-naming-convention': 'abbreviated'}).initialize(self.fake_plugin_registry)
         self.valid_underscore = self.instance(**{'type': self.type(),
-                                                 'file-naming-convention': 'underscore'})
+                                                 'file-naming-convention': 'underscore'}).initialize(self.fake_plugin_registry)
+        self.valid = [self.valid_identifier, self.valid_abbreviated, self.valid_underscore]
 
     @abstractmethod
     def instance(self, **kwargs) -> BasePluginRegistryLayout:
@@ -149,9 +155,8 @@ class _BasePluginRegistryLayoutTestCase(ABC, PydanticTestCase):
                                         PluginRegistryLayoutFileNamingConvention.__args__)
 
     def test_get_type(self) -> None:
-        self.assertEqual(self.valid_identifier.get_type(), self.type())
-        self.assertEqual(self.valid_abbreviated.get_type(), self.type())
-        self.assertEqual(self.valid_underscore.get_type(), self.type())
+        for valid in self.valid:
+            self.assertEqual(valid.get_type(), self.type())
 
     def test_get_file_naming_convention(self) -> None:
         self.assertEqual(self.valid_identifier.get_file_naming_convention(), 'identifier')
@@ -166,6 +171,10 @@ class _BasePluginRegistryLayoutTestCase(ABC, PydanticTestCase):
                          'MyPlugin.jar')
         self.assertEqual(getattr(self.valid_underscore, '_get_dstfile')(plugid),
                          'org_myproject_plugin_MyPlugin.jar')
+
+    def test_get_plugin_registry(self) -> None:
+        for valid in self.valid:
+            self.assertEqual(valid.get_plugin_registry(), self.fake_plugin_registry)
 
 
 class TestDirectoryPluginRegistryLayout(_BasePluginRegistryLayoutTestCase):
@@ -201,6 +210,7 @@ class TestPluginRegistryLayer(PydanticTestCase):
         self.valid_relative = PluginRegistryLayer(id='mylayer',
                                                   name='My Layer',
                                                   path='layerdir').initialize(self.fake_plugin_registry)
+        self.valid = [self.valid_absolute, self.valid_relative]
 
     def test_missing_identifier(self) -> None:
         self.assertPydanticMissing(lambda: PluginRegistryLayer(),
@@ -234,16 +244,20 @@ class TestPluginRegistryLayer(PydanticTestCase):
         self.assertRaises(ValueError, lambda: prl.get_path())
 
     def test_get_id(self) -> None:
-        self.assertEqual(self.valid_absolute.get_id(), 'mylayer')
-        self.assertEqual(self.valid_relative.get_id(), 'mylayer')
+        for valid in self.valid:
+            self.assertEqual(valid.get_id(), 'mylayer')
 
     def test_get_name(self) -> None:
-        self.assertEqual(self.valid_absolute.get_name(), 'My Layer')
-        self.assertEqual(self.valid_relative.get_name(), 'My Layer')
+        for valid in self.valid:
+            self.assertEqual(valid.get_name(), 'My Layer')
 
     def test_get_path(self) -> None:
         self.assertEqual(self.valid_absolute.get_path(), Path('/tmp/layerdir'))
         self.assertEqual(self.valid_relative.get_path(), ROOT.joinpath('layerdir'))
+
+    def test_get_plugin_registry(self) -> None:
+        for valid in self.valid:
+            self.assertEqual(valid.get_plugin_registry(), self.fake_plugin_registry)
 
 
 class TestPluginRegistry(PydanticTestCase):
@@ -329,6 +343,36 @@ class TestPluginRegistry(PydanticTestCase):
     def test_empty_plugin_identifiers(self) -> None:
         self.assertPydanticTooShort(lambda: PluginRegistry(**{'plugin-identifiers': []}),
                                     'plugin-identifiers')
+
+    def test_missing_suppressed_plugin_identifiers(self) -> None:
+        PluginRegistry(**{'kind': 'PluginRegistry',
+                          'id': 'myid',
+                          'name': 'My Name',
+                          'layout': self.valid_layout,
+                          'layers': [
+                              self.valid_layer,
+                          ],
+                          'plugin-identifiers': [
+                              'whatever',
+                          ]})
+
+    def test_null_suppressed_plugin_identifiers(self) -> None:
+        self.assertPydanticListType(lambda: PluginRegistry(**{'suppressed-plugin-identifiers': None}),
+                                    'suppressed-plugin-identifiers')
+
+    def test_empty_plugin_identifiers(self) -> None:
+        PluginRegistry(**{'kind': 'PluginRegistry',
+                          'id': 'myid',
+                          'name': 'My Name',
+                          'layout': self.valid_layout,
+                          'layers': [
+                              self.valid_layer,
+                          ],
+                          'plugin-identifiers': [
+                              'whatever',
+                          ],
+                          'suppressed-plugin-identifiers': []
+                          })
 
     def test_kind(self) -> None:
         self.assertEqual(self.valid.kind, 'PluginRegistry')

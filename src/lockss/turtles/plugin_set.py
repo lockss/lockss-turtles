@@ -29,11 +29,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """
-Library to represent plugin sets and plugin set catalogs.
+Module to represent plugin sets and plugin set catalogs.
 """
 
-# Remove in Python 3.14
-# See https://stackoverflow.com/questions/33533148/how-do-i-type-hint-a-method-with-the-type-of-the-enclosing-class/33533514#33533514
+# Remove in Python 3.14; see https://stackoverflow.com/a/33533514
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -42,7 +41,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
-from typing import Annotated, Any, ClassVar, Literal, Optional, Union
+from typing import Annotated, Any, Callable, ClassVar, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -248,7 +247,7 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
                      plugin_id: PluginIdentifier,
                      keystore_path: Path,
                      keystore_alias: str,
-                     keystore_password=None) -> tuple[Path, Plugin]:
+                     keystore_password: Optional[Callable[[], str]]=None) -> tuple[Path, Plugin]:
         """
         Builds the given plugin with the supplied plugin signing credentials.
 
@@ -285,7 +284,7 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
     def _big_build(self,
                    keystore_path: Path,
                    keystore_alias: str,
-                   keystore_password: str=None) -> None:
+                   keystore_password: Optional[Callable[[], str]]=None) -> None:
         """
         Runs ``mvn package`` on the project if the ``_built`` flag is False.
 
@@ -301,8 +300,9 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
             # Do build
             cmd = ['mvn', 'package',
                    f'-Dkeystore.file={keystore_path!s}',
-                   f'-Dkeystore.alias={keystore_alias}',
-                   f'-Dkeystore.password={keystore_password}']
+                   f'-Dkeystore.alias={keystore_alias}']
+            if keystore_password:
+                cmd.extend(f'-Dkeystore.password={keystore_password()}')
             try:
                 subprocess.run(cmd, cwd=self.get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             except subprocess.CalledProcessError as cpe:
@@ -377,7 +377,7 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
                      plugin_id: PluginIdentifier,
                      keystore_path: Path,
                      keystore_alias: str,
-                     keystore_password=None) -> tuple[Path, Plugin]:
+                     keystore_password: Optional[Callable[[], str]]=None) -> tuple[Path, Plugin]:
         """
         Builds the given plugin with the supplied plugin signing credentials.
 
@@ -388,7 +388,7 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
         :param keystore_alias: The alias to use in the plugin signing keystore.
         :type keystore_alias: str
         :param keystore_password: The plugin signing password.
-        :type keystore_password:
+        :type keystore_password: Optional[Callable[[], str]]
         :return: A tuple of the built and signed JAR file and a Plugin object
                  instantiated from it.
         :rtype: tuple[Path, Plugin]
@@ -433,7 +433,7 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
                       plugin_id: PluginIdentifier,
                       keystore_path: Path,
                       keystore_alias: str,
-                      keystore_password: str=None) -> tuple[Path, Plugin]:
+                      keystore_password: Optional[Callable[[], str]]=None) -> tuple[Path, Plugin]:
         """
         Performs the "little build" of the given plugin.
 
@@ -444,7 +444,7 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
         :param keystore_alias: The alias to use in the plugin signing keystore.
         :type keystore_alias: str
         :param keystore_password: The plugin signing password.
-        :type keystore_password:
+        :type keystore_password: Optional[Callable[[], str]]
         :return: A tuple of the built and signed JAR file and a Plugin object
                  instantiated from it.
         :rtype: tuple[Path, Plugin]
@@ -483,8 +483,8 @@ class AntPluginSetBuilder(BasePluginSetBuilder):
                '--jar', str(jar_path),
                '--alias', keystore_alias,
                '--keystore', str(keystore_path)]
-        if keystore_password is not None:
-            cmd.extend(['--password', keystore_password])
+        if keystore_password:
+            cmd.extend(['--password', keystore_password()])
         try:
             subprocess.run(cmd, cwd=self.get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
         except subprocess.CalledProcessError as cpe:
@@ -552,7 +552,7 @@ class PluginSet(BaseModel):
                      plugin_id: PluginIdentifier,
                      keystore_path: Path,
                      keystore_alias: str,
-                     keystore_password=None) -> tuple[Path, Plugin]:
+                     keystore_password: Optional[Callable[[], str]]=None) -> tuple[Path, Plugin]:
         """
         Builds the given plugin with the supplied plugin signing credentials.
 
@@ -563,7 +563,7 @@ class PluginSet(BaseModel):
         :param keystore_alias: The alias to use in the plugin signing keystore.
         :type keystore_alias: str
         :param keystore_password: The plugin signing password.
-        :type keystore_password:
+        :type keystore_password: Optional[Callable[[], str]]
         :return: A tuple of the built and signed JAR file and a Plugin object
                  instantiated from it.
         """

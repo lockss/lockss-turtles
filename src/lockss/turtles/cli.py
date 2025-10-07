@@ -46,15 +46,15 @@ import tabulate
 from typing import Optional
 
 from . import __copyright__, __license__, __version__
-from .app import TurtlesApp
+from .app import Turtles
 from .plugin_registry import PluginRegistryLayerIdentifier
 from .util import file_or
 
 
 class PluginBuildingOptions(BaseModel):
     plugin_set: Optional[list[FilePath]] = Field(aliases=['-s'], title='Plugin Sets', description=f'(plugin sets) add one or more plugin set definition files to the loaded plugin sets')
-    plugin_set_catalog: Optional[list[FilePath]] = Field(aliases=['-S'], title='Plugin Set Catalogs', description=f'(plugin sets) add one or more plugin set catalogs to the loaded plugin set catalogs; if no plugin set catalogs or plugin sets are specified, load {file_or(TurtlesApp.default_plugin_set_catalog_choices())}')
-    plugin_signing_credentials: Optional[FilePath] = Field(aliases=['-c'], title='Plugin Signing Credentials', description=f'(plugin signing credentials) load the plugin signing credentials from the given file, or if none, from {file_or(TurtlesApp.default_plugin_signing_credentials_choices())}')
+    plugin_set_catalog: Optional[list[FilePath]] = Field(aliases=['-S'], title='Plugin Set Catalogs', description=f'(plugin sets) add one or more plugin set catalogs to the loaded plugin set catalogs; if no plugin set catalogs or plugin sets are specified, load {file_or(Turtles.default_plugin_set_catalog_choices())}')
+    plugin_signing_credentials: Optional[FilePath] = Field(aliases=['-c'], title='Plugin Signing Credentials', description=f'(plugin signing credentials) load the plugin signing credentials from the given file, or if none, from {file_or(Turtles.default_plugin_signing_credentials_choices())}')
     plugin_signing_password: Optional[str] = Field(title='Plugin Signing Password', description='(plugin signing credentials) set the plugin signing password, or if none, prompt interactively')
 
     def get_plugin_sets(self) -> list[Path]:
@@ -63,21 +63,21 @@ class PluginBuildingOptions(BaseModel):
     def get_plugin_set_catalogs(self) -> list[Path]:
         if self.plugin_set or self.plugin_set_catalog:
             return [path(p) for p in self.plugin_set_catalog or []]
-        if single := TurtlesApp.select_default_plugin_set_catalog():
+        if single := Turtles.select_default_plugin_set_catalog():
             return [single]
-        raise FileNotFoundError(file_or(TurtlesApp.default_plugin_set_catalog_choices()))
+        raise FileNotFoundError(file_or(Turtles.default_plugin_set_catalog_choices()))
 
     def get_plugin_signing_credentials(self) -> Path:
         if self.plugin_signing_credentials:
             return path(self.plugin_signing_credentials)
-        if ret := TurtlesApp.select_default_plugin_signing_credentials():
+        if ret := Turtles.select_default_plugin_signing_credentials():
             return ret
-        raise FileNotFoundError(file_or(TurtlesApp.default_plugin_signing_credentials_choices()))
+        raise FileNotFoundError(file_or(Turtles.default_plugin_signing_credentials_choices()))
 
 
 class PluginDeploymentOptions(BaseModel):
     plugin_registry: Optional[list[FilePath]] = Field(aliases=['-r'], description=f'(plugin registry) add one or more plugin registries to the loaded plugin registries')
-    plugin_registry_catalog: Optional[list[FilePath]] = Field(aliases=['-R'], description=f'(plugin registry) add one or more plugin registry catalogs to the loaded plugin registry catalogs; if no plugin registry catalogs or plugin registries are specified, load {file_or(TurtlesApp.default_plugin_registry_catalog_choices())}')
+    plugin_registry_catalog: Optional[list[FilePath]] = Field(aliases=['-R'], description=f'(plugin registry) add one or more plugin registry catalogs to the loaded plugin registry catalogs; if no plugin registry catalogs or plugin registries are specified, load {file_or(Turtles.default_plugin_registry_catalog_choices())}')
     plugin_registry_layer: Optional[list[str]] = Field(aliases=['-l'], description='(plugin registry layers) add one or more plugin registry layers to the set of plugin registry layers to process')
     plugin_registry_layers: Optional[list[FilePath]] = Field(aliases=['-L'], description='(plugin registry layers) add the plugin registry layers listed in one or more files to the set of plugin registry layers to process')
     testing: Optional[bool] = Field(False, aliases=['-t'], description='(plugin registry layers) synonym for --plugin-registry-layer testing (i.e. add "testing" to the list of plugin registry layers to process)')
@@ -93,9 +93,9 @@ class PluginDeploymentOptions(BaseModel):
     def get_plugin_registry_catalogs(self) -> list[Path]:
         if self.plugin_registry or self.plugin_registry_catalog:
             return [path(p) for p in self.plugin_registry_catalog or []]
-        if single := TurtlesApp.select_default_plugin_registry_catalog():
+        if single := Turtles.select_default_plugin_registry_catalog():
             return [single]
-        raise FileNotFoundError(file_or(TurtlesApp.default_plugin_set_catalog_choices()))
+        raise FileNotFoundError(file_or(Turtles.default_plugin_set_catalog_choices()))
 
     def get_plugin_registry_layers(self) -> list[PluginRegistryLayerIdentifier]:
         ret = [*(self.plugin_registry_layer or []), *chain.from_iterable(file_lines(file_path) for file_path in self.plugin_registry_layers or [])]
@@ -173,7 +173,7 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
         super().__init__(model=TurtlesCommand,
                          prog='turtles',
                          description='Tool for managing LOCKSS plugin sets and LOCKSS plugin registries')
-        self._app: TurtlesApp = TurtlesApp()
+        self._app: Turtles = Turtles()
 
     # def _analyze_registry(self):
     #     # Prerequisites
