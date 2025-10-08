@@ -316,7 +316,7 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
             _p = getpass('Plugin signing password: ')
         else:
             self._parser.error('no plugin signing password specified while in non-interactive mode')
-        self._app.set_password(lambda: _p)
+        self._app.set_plugin_signing_password(lambda: _p)
 
     def _release_plugin(self, release_plugin_command: TurtlesCommand.ReleasePluginCommand) -> None:
         errs = []

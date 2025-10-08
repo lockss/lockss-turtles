@@ -35,11 +35,13 @@ Module to represent Turtles operations.
 # Remove in Python 3.14; see https://stackoverflow.com/a/33533514
 from __future__ import annotations
 
+# Remove in Python 3.11; see https://docs.python.org/3.11/library/exceptions.html#exception-groups
+from exceptiongroup import ExceptionGroup
+
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import ClassVar, Optional, Union
 
-from exceptiongroup import ExceptionGroup
 from lockss.pybasic.fileutil import path
 from pydantic import ValidationError
 import xdg
@@ -66,6 +68,7 @@ BuildPluginResult = tuple[str, Optional[Path], Optional[Plugin]]
 #: Third item (index 2): deployed JAR file path (or None if not deployed).
 #: Fourth item (index 3): plugin object (or None if not deployed).
 DeployPluginResult = tuple[PluginRegistryIdentifier, PluginRegistryLayerIdentifier, Optional[Path], Optional[Plugin]]
+
 
 class Turtles(object):
     """
@@ -103,7 +106,7 @@ class Turtles(object):
         Constructor.
         """
         super().__init__()
-        self._password_callable: Optional[Callable[[], str]] = None
+        self._plugin_signing_password_callable: Optional[Callable[[], str]] = None
         self._plugin_registries: list[PluginRegistry] = list()
         self._plugin_registry_catalogs: list[PluginRegistryCatalog] = list()
         self._plugin_set_catalogs: list[PluginSetCatalog] = list()
@@ -116,33 +119,44 @@ class Turtles(object):
         Builds zero or more plugins.
 
         :param plugin_id_or_plugin_ids: Either one plugin identifier, or a list
-                                        plugin identifiers.
+                                        of plugin identifiers.
         :type plugin_id_or_plugin_ids: Union[PluginIdentifier, list[PluginIdentifier]]
-        :return: A non-null mapping from plugin identifier to build plugin
-                 result; if no plugin identifiers were given, the result is an
-                 empty mapping.
+        :return: A mapping from plugin identifier to build plugin result; if no
+                 plugin identifiers were given, the result is an empty mapping.
         :rtype: dict[str, BuildPluginResult]
+        :raises Exception: If a given plugin identifier is not found in any
+                           loaded plugin set.
         """
         plugin_ids: list[PluginIdentifier] = plugin_id_or_plugin_ids if isinstance(plugin_id_or_plugin_ids, list) else [plugin_id_or_plugin_ids]
         return {plugin_id: self._build_one_plugin(plugin_id) for plugin_id in plugin_ids}
 
     def deploy_plugin(self,
                       src_path_or_src_paths: Union[Path, list[Path]],
-                      layer_id_or_layers_ids: Union[PluginRegistryLayerIdentifier, list[PluginRegistryLayerIdentifier]],
+                      layer_id_or_layer_ids: Union[PluginRegistryLayerIdentifier, list[PluginRegistryLayerIdentifier]],
                       interactive: bool=False) -> dict[tuple[Path, PluginIdentifier], list[DeployPluginResult]]:
         """
+        Deploys zero or more plugins.
 
-        :param src_path_or_src_paths:
+        :param src_path_or_src_paths: Either one signed JAR file paths or a list
+                                      of signed JAR file paths.
         :type src_path_or_src_paths: Union[Path, list[Path]]
-        :param layer_id_or_layers_ids:
-        :type layer_id_or_layers_ids: Union[PluginRegistryLayerIdentifier, list[PluginRegistryLayerIdentifier]]
-        :param interactive:
+        :param layer_id_or_layer_ids: Either one plugin registry layer
+                                      identifier or a list of plugin registry
+                                      layer identifiers.
+        :type layer_id_or_layer_ids: Union[PluginRegistryLayerIdentifier, list[PluginRegistryLayerIdentifier]]
+        :param interactive: Whether interactive prompts are allowed (default
+                            False).
         :type interactive: bool
-        :return:
+        :return: A mapping from tuples of signed JAR file path and corresponding
+                 plugin identifier to a list of build deployment results (one
+                 per plugin registry layer); if no signed JAR file paths were
+                 given, the result is an empty mapping.
         :rtype: dict[tuple[Path, PluginIdentifier], list[DeployPluginResult]]
+        :raises Exception: If a given plugin is not declared in any loaded
+                           plugin registry.
         """
         src_paths: list[Path] = src_path_or_src_paths if isinstance(src_path_or_src_paths, list) else [src_path_or_src_paths]
-        layer_ids: list[PluginRegistryLayerIdentifier] = layer_id_or_layers_ids if isinstance(layer_id_or_layers_ids, list) else [layer_id_or_layers_ids]
+        layer_ids: list[PluginRegistryLayerIdentifier] = layer_id_or_layer_ids if isinstance(layer_id_or_layer_ids, list) else [layer_id_or_layer_ids]
         plugin_ids = [Plugin.id_from_jar(src_path) for src_path in src_paths] # FIXME: should go down to _deploy_one_plugin?
         return {(src_path, plugin_id): self._deploy_one_plugin(src_path,
                                                                plugin_id,
@@ -151,6 +165,19 @@ class Turtles(object):
 
     def load_plugin_registries(self,
                                plugin_registry_path_or_str: PathOrStr) -> Turtles:
+        """
+        Processes the given YAML file, loading all plugin registry definitions
+        it contains, ignoring other YAML objects.
+
+        :param plugin_registry_path_or_str: A file path (or string).
+        :type plugin_registry_path_or_str: PathOrStr
+        :return: This Turtles object (for chaining).
+        :rtype: Turtles
+        :raises ExceptionGroup: If one or more errors occur while loading plugin
+                                registry definitions.
+        :raises ValueError: If the given file has already been processed or if
+                            it contains no plugin registry definitions.
+        """
         plugin_registry_path = path(plugin_registry_path_or_str)
         if plugin_registry_path in map(lambda pr: pr.get_root(), self._plugin_registries):
             raise ValueError(f'Plugin registries already loaded from: {plugin_registry_path!s}')
@@ -172,6 +199,21 @@ class Turtles(object):
 
     def load_plugin_registry_catalogs(self,
                                       plugin_registry_catalog_path_or_str: PathOrStr) -> Turtles:
+        """
+        Processes the given YAML file, loading all plugin registry catalog
+        definitions it contains and in turn all plugin registry definitions they
+        reference, ignoring other YAML objects.
+
+        :param plugin_registry_catalog_path_or_str: A file path (or string).
+        :type plugin_registry_catalog_path_or_str: PathOrStr
+        :return: This Turtles object (for chaining).
+        :rtype: Turtles
+        :raises ExceptionGroup: If one or more errors occur while loading plugin
+                                registry catalog definitions or the plugin
+                                registry definitions they reference.
+        :raises ValueError: If the given file has already been processed or if
+                            it contains no plugin registry catalog definitions.
+        """
         plugin_registry_catalog_path = path(plugin_registry_catalog_path_or_str)
         if plugin_registry_catalog_path in map(lambda prc: prc.get_root(), self._plugin_registry_catalogs):
             raise ValueError(f'Plugin registry catalogs already loaded from: {plugin_registry_catalog_path!s}')
@@ -200,6 +242,21 @@ class Turtles(object):
 
     def load_plugin_set_catalogs(self,
                                  plugin_set_catalog_path_or_str: PathOrStr) -> Turtles:
+        """
+        Processes the given YAML file, loading all plugin set catalog
+        definitions it contains and in turn all plugin set definitions they
+        reference, ignoring other YAML objects.
+
+        :param plugin_set_catalog_path_or_str: A file path (or string).
+        :type plugin_set_catalog_path_or_str: PathOrStr
+        :return: This Turtles object (for chaining).
+        :rtype: Turtles
+        :raises ExceptionGroup: If one or more errors occur while loading plugin
+                                set catalog definitions or the plugin set
+                                definitions they reference.
+        :raises ValueError: If the given file has already been processed or if
+                            it contains no plugin set catalog definitions.
+        """
         plugin_set_catalog_path = path(plugin_set_catalog_path_or_str)
         if plugin_set_catalog_path in map(lambda psc: psc.get_root(), self._plugin_set_catalogs):
             raise ValueError(f'Plugin set catalogs already loaded from: {plugin_set_catalog_path!s}')
@@ -228,6 +285,19 @@ class Turtles(object):
 
     def load_plugin_sets(self,
                          plugin_set_path_or_str: PathOrStr) -> Turtles:
+        """
+        Processes the given YAML file, loading all plugin set definitions it
+        contains, ignoring other YAML objects.
+
+        :param plugin_set_path_or_str: A file path (or string).
+        :type plugin_set_path_or_str: PathOrStr
+        :return: This Turtles object (for chaining).
+        :rtype: Turtles
+        :raises ExceptionGroup: If one or more errors occur while loading plugin
+                                set definitions.
+        :raises ValueError: If the given file has already been processed or if
+                            it contains no plugin set definitions.
+        """
         plugin_set_path = path(plugin_set_path_or_str)
         if plugin_set_path in map(lambda ps: ps.get_root(), self._plugin_sets):
             raise ValueError(f'Plugin sets already loaded from: {plugin_set_path!s}')
@@ -249,6 +319,21 @@ class Turtles(object):
 
     def load_plugin_signing_credentials(self,
                                         plugin_signing_credentials_path_or_str: PathOrStr) -> Turtles:
+        """
+        Processes the given YAML file, loading all plugin set definitions it
+        contains in search of exactly one, ignoring YAML objects of other kinds.
+
+        :param plugin_signing_credentials_path_or_str: A file path (or string).
+        :type plugin_signing_credentials_path_or_str: PathOrStr
+        :return: This Turtles object (for chaining).
+        :rtype: Turtles
+        :raises ExceptionGroup: If one or more errors occur while loading plugin
+                                signing credentials definitions.
+        :raises ValueError: If the given file has already been processed, if it
+                            contains no plugin signing credentials definitions,
+                            or if it contains more than one plugin signing
+                            credentials definitions.
+        """
         plugin_signing_credentials_path = path(plugin_signing_credentials_path_or_str)
         if self._plugin_signing_credentials:
             raise ValueError(f'Plugin signing credentials already loaded from: {self._plugin_signing_credentials.get_root()!s}')
@@ -272,7 +357,26 @@ class Turtles(object):
     def release_plugin(self,
                        plugin_id_or_plugin_ids: Union[PluginIdentifier, list[PluginIdentifier]],
                        layer_id_or_layer_ids: Union[PluginRegistryLayerIdentifier, list[PluginRegistryLayerIdentifier]],
-                       interactive: bool=False) -> dict[str, list[tuple[str, str, Path, Plugin]]]:
+                       interactive: bool=False) -> dict[PluginIdentifier, list[DeployPluginResult]]:
+        """
+        Releases (builds then deploys) zero or more plugins.
+
+        :param plugin_id_or_plugin_ids: Either one plugin identifier, or a list
+                                        of plugin identifiers.
+        :type plugin_id_or_plugin_ids: Union[PluginIdentifier, list[PluginIdentifier]]
+        :param layer_id_or_layer_ids: Either one plugin registry layer
+                                      identifier or a list of plugin registry
+                                      layer identifiers.
+        :type layer_id_or_layer_ids: Union[PluginRegistryLayerIdentifier, list[PluginRegistryLayerIdentifier]]
+        :param interactive: Whether interactive prompts are allowed (default
+                            False).
+        :type interactive: bool
+        :return: A mapping from plugin identifier to plugin deployment result;
+                 if no plugins were given, the result is an empty mapping.
+        :rtype: dict[PluginIdentifier, list[DeployPluginResult]]
+        :raises Exception: If a given plugin is not found in any plugin set or
+                           is not declared in any loaded plugin registry.
+        """
         plugin_ids: list[PluginIdentifier] = plugin_id_or_plugin_ids if isinstance(plugin_id_or_plugin_ids, list) else [plugin_id_or_plugin_ids]
         layer_ids: list[PluginRegistryLayerIdentifier] = layer_id_or_layer_ids if isinstance(layer_id_or_layer_ids, list) else [layer_id_or_layer_ids]
         # ... plugin_id -> (set_id, jar_path, plugin)
@@ -284,9 +388,14 @@ class Turtles(object):
                                   interactive=interactive)
         return {plugin_id: val for (jar_path, plugin_id), val in ret2.items()}
 
-    def set_password(self,
-                     password_or_callable: Union[str, Callable[[], str]]) -> None:
-        self._password_callable = password_or_callable if callable(password_or_callable) else lambda: password_or_callable
+    def set_plugin_signing_password(self,
+                                    callable_or_password: Union[str, Callable[[], str]]) -> None:
+        """
+
+        :param callable_or_password:
+        :type callable_or_password: Union[str, Callable[[], str]]
+        """
+        self._plugin_signing_password_callable = callable_or_password if callable(callable_or_password) else lambda: callable_or_password
 
     def _build_one_plugin(self,
                           plugin_id: PluginIdentifier) -> BuildPluginResult:
@@ -339,8 +448,7 @@ class Turtles(object):
         for plugin_registry in self._plugin_registries:
             if plugin_registry.has_plugin(plugin_id):
                 for layer_id in layer_ids:
-                    layer = plugin_registry.get_layer(layer_id)
-                    if layer is not None:
+                    if layer := plugin_registry.get_layer(layer_id):
                         dp = layer.deploy_plugin(plugin_id,
                                                  src_jar,
                                                  interactive=interactive)
@@ -359,7 +467,7 @@ class Turtles(object):
         return self._plugin_signing_credentials.get_plugin_signing_keystore()
 
     def _get_plugin_signing_password(self) -> Optional[Callable[[], str]]:
-        return self._password_callable
+        return self._plugin_signing_password_callable
 
     @staticmethod
     def default_plugin_registry_catalog_choices() -> tuple[Path, ...]:
