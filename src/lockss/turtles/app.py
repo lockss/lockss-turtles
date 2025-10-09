@@ -391,8 +391,10 @@ class Turtles(object):
     def set_plugin_signing_password(self,
                                     callable_or_password: Union[str, Callable[[], str]]) -> None:
         """
+        Sets the plugin signing password callable.
 
-        :param callable_or_password:
+        :param callable_or_password: A callable returning a string (or simply a
+                                     string).
         :type callable_or_password: Union[str, Callable[[], str]]
         """
         self._plugin_signing_password_callable = callable_or_password if callable(callable_or_password) else lambda: callable_or_password
@@ -461,44 +463,135 @@ class Turtles(object):
         return ret
 
     def _get_plugin_signing_alias(self) -> str:
+        """
+        Returns the plugin signing alias from the loaded plugin signing
+        credentials.
+
+        :return: The plugin signing alias.
+        :rtype: str
+        """
         return self._plugin_signing_credentials.get_plugin_signing_alias()
 
     def _get_plugin_signing_keystore(self) -> Path:
+        """
+        Returns the plugin signing keystore file path from the loaded plugin
+        signing credentials.
+
+        :return: The plugin signing keystore file path.
+        :rtype: Path
+        """
         return self._plugin_signing_credentials.get_plugin_signing_keystore()
 
     def _get_plugin_signing_password(self) -> Optional[Callable[[], str]]:
+        """
+        Returns the plugin signing password.
+
+        :return: The plugin signing password callable.
+        :rtype: Optional[Callable[[], str]]
+        """
         return self._plugin_signing_password_callable
 
     @staticmethod
     def default_plugin_registry_catalog_choices() -> tuple[Path, ...]:
+        """
+        Returns the tuple of default plugin registry catalog file choices.
+
+        See ``CONFIG_DIRS`` and ``PLUGIN_REGISTRY_CATALOG``.
+
+        :return: A tuple of default plugin registry catalog file choices.
+        :rtype: tuple[Path, ...]
+        """
         return Turtles._default_files(Turtles.PLUGIN_REGISTRY_CATALOG)
 
     @staticmethod
     def default_plugin_set_catalog_choices() -> tuple[Path, ...]:
+        """
+        Returns the tuple of default plugin set catalog file choices.
+
+        See ``CONFIG_DIRS`` and ``PLUGIN_SET_CATALOG``.
+
+        :return: A tuple of default plugin set catalog file choices.
+        :rtype: tuple[Path, ...]
+        """
         return Turtles._default_files(Turtles.PLUGIN_SET_CATALOG)
 
     @staticmethod
     def default_plugin_signing_credentials_choices() -> tuple[Path, ...]:
+        """
+        Returns the tuple of default plugin signing credentials file choices.
+
+        See ``CONFIG_DIRS`` and ``PLUGIN_SIGNING_CREDENTIALS``.
+
+        :return: A tuple of default plugin signing credentials file choices.
+        :rtype: tuple[Path, ...]
+        """
         return Turtles._default_files(Turtles.PLUGIN_SIGNING_CREDENTIALS)
 
     @staticmethod
     def select_default_plugin_registry_catalog() -> Optional[Path]:
+        """
+        Of the default plugin registry catalog file choices, select the first
+        one that exists.
+
+        See ``default_plugin_registry_catalog_choices`` and ``_select_file``.
+
+        :return: The first of the default plugin registry catalog file choices
+                 that exists, or None if none do.
+        :rtype: Optional[Path]
+        """
         return Turtles._select_file(Turtles.default_plugin_registry_catalog_choices())
 
     @staticmethod
     def select_default_plugin_set_catalog() -> Optional[Path]:
+        """
+        Of the default plugin set catalog file choices, select the first one
+        that exists.
+
+        See ``default_plugin_registry_set_choices`` and ``_select_file``.
+
+        :return: The first of the default plugin set catalog file choices that
+                 exists, or None if none do.
+        :rtype: Optional[Path]
+        """
         return Turtles._select_file(Turtles.default_plugin_set_catalog_choices())
 
     @staticmethod
     def select_default_plugin_signing_credentials() -> Optional[Path]:
+        """
+        Of the default plugin signing credentials file choices, select the first
+        one that exists.
+
+        See ``default_plugin_registry_set_choices`` and ``_select_file``.
+
+        :return: The first of the default plugin signing credentials file
+                 choices that exists, or None if none do.
+        :rtype: Optional[Path]
+        """
         return Turtles._select_file(Turtles.default_plugin_signing_credentials_choices())
 
     @staticmethod
     def _default_files(file_str) -> tuple[Path, ...]:
+        """
+        Given a file base name, returns a tuple of this file in the various
+        Turtles configuration directories (``CONFIG_DIRS``).
+
+        :param file_str: A file base name.
+        :type file_str: str
+        :return: The file in the various Turtles configuration directories.
+        :rtype: tuple[Path, ...]
+        """
         return tuple(dir_path.joinpath(file_str) for dir_path in Turtles.CONFIG_DIRS)
 
     @staticmethod
     def _select_file(choices: Iterable[Path]) -> Optional[Path]:
+        """
+        Of the given files, returns the first one that exists.
+
+        :param choices: An iterable of file paths.
+        :type choices: Iterable[Path]
+        :return: The first choice that exists, or None if none do.
+        :rtype: Optional[Path]
+        """
         for p in choices:
             if p.is_file():
                 return p
