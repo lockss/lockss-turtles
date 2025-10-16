@@ -43,12 +43,12 @@ from lockss.pybasic.cliutil import BaseCli, StringCommand, COPYRIGHT_DESCRIPTION
 from lockss.pybasic.fileutil import file_lines, path
 from lockss.pybasic.outpututil import OutputFormatOptions
 from pydantic.v1 import BaseModel, Field, FilePath
-from pydantic.v1.class_validators import validator
 import tabulate
 from typing import Optional
 
 from . import __copyright__, __license__, __version__
 from .app import Turtles
+from .plugin import PluginIdentifier
 from .plugin_registry import PluginRegistryLayerIdentifier
 from .util import file_or
 
@@ -60,23 +60,22 @@ class PluginBuildingOptions(BaseModel):
     ``--plugin-signing-password`` options.
     """
 
-    #: The list of plugin set files; see ``get_plugin_sets``.
+    #: The ``--plugin-set``/``-s`` option.
     plugin_set: Optional[list[FilePath]] = Field(aliases=['-s'],
                                                  title='Plugin Sets',
                                                  description=f'(plugin sets) add one or more plugin set definition files to the loaded plugin sets')
 
-    #: The list of plugin set catalog files; see ``get_plugin_set_catalogs``.
+    #: The ``--plugin-set-catalog``/``-S`` option.
     plugin_set_catalog: Optional[list[FilePath]] = Field(aliases=['-S'],
                                                          title='Plugin Set Catalogs',
                                                          description=f'(plugin sets) add one or more plugin set catalogs to the loaded plugin set catalogs; if no plugin set catalogs or plugin sets are specified, load {file_or(Turtles.default_plugin_set_catalog_choices())}')
 
-    #: The plugin signing credentials file; see
-    #: ``get_plugin_signing_credentials``.
+    #: The ``--plugin-signing-credentials``/``-c`` option.
     plugin_signing_credentials: Optional[FilePath] = Field(aliases=['-c'],
                                                            title='Plugin Signing Credentials',
                                                            description=f'(plugin signing credentials) load the plugin signing credentials from the given file, or if none, from {file_or(Turtles.default_plugin_signing_credentials_choices())}')
 
-    #: The plugin signing password.
+    #: The ``--plugin-signing-password`` option.
     plugin_signing_password: Optional[str] = Field(title='Plugin Signing Password',
                                                    description='(plugin signing credentials) set the plugin signing password, or if none, prompt interactively')
 
@@ -134,36 +133,33 @@ class PluginDeploymentOptions(BaseModel):
     ``--production``/``-P`` options.
     """
 
-    #: The list of plugin registry files; see ``get_plugin_registries``.
+    #: The ``--plugin-registry``/``-r`` option.
     plugin_registry: Optional[list[FilePath]] = Field(aliases=['-r'],
                                                       title='Plugin Registries',
                                                       description=f'(plugin registry) add one or more plugin registries to the loaded plugin registries')
 
-    #: The list of plugin registry catalog files; see
-    #: ``get_plugin_registry_catalogs``.
+    #: The ``--plugin-registry-catalog``/``-R`` option.
     plugin_registry_catalog: Optional[list[FilePath]] = Field(aliases=['-R'],
                                                               title='Plugin Registry Catalogs',
                                                               description=f'(plugin registry) add one or more plugin registry catalogs to the loaded plugin registry catalogs; if no plugin registry catalogs or plugin registries are specified, load {file_or(Turtles.default_plugin_registry_catalog_choices())}')
 
-    #: The list of plugin registry layer identifiers; see
-    #: ``get_plugin_registry_layers``
+    #: The ``--plugin-registry-layer``/``-l`` option.
     plugin_registry_layer: Optional[list[str]] = Field(aliases=['-l'],
                                                        title='Plugin Registry Layer Identifiers',
                                                        description='(plugin registry layers) add one or more plugin registry layers to the set of plugin registry layers to process')
 
-    #: The list of plugin registry layer identifier files; see
-    #: ``get_plugin_registry_layers``
+    #: The ``--plugin-registry-layers``/``-L`` option.
     plugin_registry_layers: Optional[list[FilePath]] = Field(aliases=['-L'],
-                                                             title='Plugin Registry Layer Identifier Files',
+                                                             title='Files of Plugin Registry Layer Identifiers',
                                                              description='(plugin registry layers) add the plugin registry layers listed in one or more files to the set of plugin registry layers to process')
 
-    #: The ``testing`` plugin registry layer flag.
+    #: The ``--testing``/``-t`` option.
     testing: Optional[bool] = Field(False,
                                     aliases=['-t'],
                                     title='Testing Layer',
                                     description='(plugin registry layers) synonym for --plugin-registry-layer testing (i.e. add "testing" to the list of plugin registry layers to process)')
 
-    #: The ``production`` plugin registry layer flag.
+    #: The ``--production``/``-P`` option.
     production: Optional[bool] = Field(False,
                                        aliases=['-p'],
                                        title='Production Layer',
@@ -227,28 +223,27 @@ class PluginIdentifierOptions(BaseModel):
     ``--plugin-identifier``/``-i``, ``--plugin-identifiers``/``-I`` options.
     """
 
-    #: The list of plugin identifiers; see ``get_plugin_identifiers``.
+    #: The ``--plugin-identifier``/``-i`` option.
     plugin_identifier: Optional[list[str]] = Field(aliases=['-i'],
                                                    title='Plugin Identifiers',
                                                    description='(plugin identifiers) add one or more plugin identifiers to the set of plugin identifiers to process')
 
-    #: The list of plugin identifier files; see ``get_plugin_identifiers``.
+    #: The ``--plugin-identifiers``/``-I`` option.
     plugin_identifiers: Optional[list[FilePath]] = Field(aliases=['-I'],
-                                                         title='Plugin Identifier Files',
+                                                         title='Files of Plugin Identifiers',
                                                          description='(plugin identifiers) add the plugin identifiers listed in one or more files to the set of plugin identifiers to process')
 
-    def get_plugin_identifiers(self) -> list[str]:
+    def get_plugin_identifiers(self) -> list[PluginIdentifier]:
         """
         Returns the cumulative list of plugin identifiers, from
         ``plugin_identifier`` and the identifiers in ``plugin_identifiers``
          files.
 
-        :return: The cumulative list of plugin registry layer identifiers, from
-                ``plugin_registry_layer`` and the identifiers in
-                ``plugin_registry_layers`` files.
-        :rtype: list[PluginRegistryLayerIdentifier]
-        :raise ValueError: If the list of plugin registry layer identifiers is
-                           empty.
+        :return: The cumulative list of plugin identifiers, from
+                ``plugin_identifier`` and the identifiers in
+                ``plugin_identifiers`` files.
+        :rtype: list[PluginIdentifier]
+        :raise ValueError: If the list of plugin identifiers is empty.
         """
         ret = [*(self.plugin_identifier or []), *chain.from_iterable(file_lines(path(file_path)) for file_path in self.plugin_identifiers or [])]
         if ret:
@@ -262,10 +257,27 @@ class PluginJarOptions(BaseModel):
     ``--plugin-jars``/``-J`` options.
     """
 
-    plugin_jar: Optional[list[FilePath]] = Field(aliases=['-j'], description='(plugin JARs) add one or more plugin JARs to the set of plugin JARs to process')
-    plugin_jars: Optional[list[FilePath]] = Field(aliases=['-J'], description='(plugin JARs) add the plugin JARs listed in one or more files to the set of plugin JARs to process')
+    #: The ``--plugin-jar``/``-j`` option.
+    plugin_jar: Optional[list[FilePath]] = Field(aliases=['-j'],
+                                                 title='Plugin JARs',
+                                                 description='(plugin JARs) add one or more plugin JARs to the set of plugin JARs to process')
 
-    def get_plugin_jars(self):
+    #: The ``--plugin-jars``/``-J`` option.
+    plugin_jars: Optional[list[FilePath]] = Field(aliases=['-J'],
+                                                  title='Files of Plugin JARs',
+                                                  description='(plugin JARs) add the plugin JARs listed in one or more files to the set of plugin JARs to process')
+
+    def get_plugin_jars(self) -> list[Path]:
+        """
+        Returns the cumulative list of plugin JARs, from ``plugin_jar`` and the
+        plugin JARs in ``plugin_jars``
+         files.
+
+        :return: The cumulative list of plugin JARs, from ``plugin_jar`` and the
+                 plugin JARs in ``plugin_jars`` files.
+        :rtype: list[Path]
+        :raise ValueError: If the list of plugin JARs is empty.
+        """
         ret = [*(self.plugin_jar or []), *chain.from_iterable(file_lines(path(file_path)) for file_path in self.plugin_jars or [])]
         if len(ret):
             return ret
@@ -273,32 +285,80 @@ class PluginJarOptions(BaseModel):
 
 
 class NonInteractiveOptions(BaseModel):
+    """
+    Pydantic-Argparse (Pydantic v1) model for the ``--non-interactive`` option.
+    """
+
+    #: The ``--non-interactive`` option.
     non_interactive: Optional[bool] = Field(False,
+                                            title='Non-Interactive',
                                             description='(plugin signing credentials) disallow interactive prompts')
 
 
 class TurtlesCommand(BaseModel):
+    """
+    Pydantic-Argparse (Pydantic v1) model for the ``turtles`` command.
+    """
 
-    class BuildPluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginBuildingOptions, PluginIdentifierOptions): pass
+    class BuildPluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginBuildingOptions, PluginIdentifierOptions):
+        """
+        Pydantic-Argparse (Pydantic v1) model for the ``build-plugin`` command.
+        """
+        pass
 
-    class DeployPluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDeploymentOptions, PluginJarOptions): pass
+    class DeployPluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDeploymentOptions, PluginJarOptions):
+        """
+        Pydantic-Argparse (Pydantic v1) model for the ``deploy-plugin`` command.
+        """
+        pass
 
-    class ReleasePluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDeploymentOptions, PluginBuildingOptions, PluginIdentifierOptions): pass
+    class ReleasePluginCommand(OutputFormatOptions, NonInteractiveOptions, PluginDeploymentOptions, PluginBuildingOptions, PluginIdentifierOptions):
+        """
+        Pydantic-Argparse (Pydantic v1) model for the ``release-plugin``
+        command.
+        """
+        pass
 
+    #: The ``bp`` synonym for the ``build-plugin`` command.
     bp: Optional[BuildPluginCommand] = Field(description='synonym for: build-plugin')
-    build_plugin: Optional[BuildPluginCommand] = Field(description='build plugins', alias='build-plugin')
+
+    #: The ``build-plugin`` command.
+    build_plugin: Optional[BuildPluginCommand] = Field(alias='build-plugin',
+                                                       description='build plugins')
+
+    #: The ``copyright`` command.
     copyright: Optional[StringCommand.type(__copyright__)] = Field(description=COPYRIGHT_DESCRIPTION)
-    deploy_plugin: Optional[DeployPluginCommand] = Field(description='deploy plugins', alias='deploy-plugin')
+
+    #: The ``deploy-plugin`` command.
+    deploy_plugin: Optional[DeployPluginCommand] = Field(alias='deploy-plugin',
+                                                         description='deploy plugins')
+
+    #: The ``dp`` synonym for the ``deploy-plugin`` command.
     dp: Optional[DeployPluginCommand] = Field(description='synonym for: deploy-plugin')
+
+    #: The ``license`` command.
     license: Optional[StringCommand.type(__license__)] = Field(description=LICENSE_DESCRIPTION)
-    release_plugin: Optional[ReleasePluginCommand] = Field(description='release (build and deploy) plugins', alias='release-plugin')
+
+    #: The ``release-plugin`` command.
+    release_plugin: Optional[ReleasePluginCommand] = Field(alias='release-plugin',
+                                                           description='release (build and deploy) plugins')
+
+    #: The ``rp`` synonym for the ``release-plugin`` command.
     rp: Optional[ReleasePluginCommand] = Field(description='synonym for: release-plugin')
+
+    #: The ``version`` command.
     version: Optional[StringCommand.type(__version__)] = Field(description=VERSION_DESCRIPTION)
 
 
 class TurtlesCli(BaseCli[TurtlesCommand]):
+    """
+    Command line tool for Turtles.
+    """
 
     def __init__(self):
+        """
+        Constructor.
+        """
         super().__init__(model=TurtlesCommand,
                          prog='turtles',
                          description='Tool for managing LOCKSS plugin sets and LOCKSS plugin registries')
@@ -362,19 +422,33 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
     #     if len(result) > 0:
     #         self._tabulate(title, result, headers)
 
-    def _bp(self, build_plugin_command: TurtlesCommand.BuildPluginCommand) -> None:
-        return self._build_plugin(build_plugin_command)
+    def _bp(self,
+            command: TurtlesCommand.BuildPluginCommand) -> None:
+        """
+        Implementation of the ``bp`` command.
 
-    def _build_plugin(self, build_plugin_command: TurtlesCommand.BuildPluginCommand) -> None:
+        :param command: The command object.
+        :type command: TurtlesCommand.BuildPluginCommand
+        """
+        return self._build_plugin(command)
+
+    def _build_plugin(self,
+                      command: TurtlesCommand.BuildPluginCommand) -> None:
+        """
+        Implementation of the ``build-plugin`` command.
+
+        :param command: The command object.
+        :type command: TurtlesCommand.BuildPluginCommand
+        """
         errs = []
-        for psc in build_plugin_command.get_plugin_set_catalogs():
+        for psc in command.get_plugin_set_catalogs():
             try:
                 self._app.load_plugin_set_catalogs(psc)
             except ValueError as ve:
                 errs.append(ve)
             except ExceptionGroup as eg:
                 errs.extend(eg.exceptions)
-        for ps in build_plugin_command.get_plugin_sets():
+        for ps in command.get_plugin_sets():
             try:
                 self._app.load_plugin_sets(ps)
             except ValueError as ve:
@@ -382,35 +456,49 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
             except ExceptionGroup as eg:
                 errs.extend(eg.exceptions)
         try:
-            self._app.load_plugin_signing_credentials(build_plugin_command.get_plugin_signing_credentials())
+            self._app.load_plugin_signing_credentials(command.get_plugin_signing_credentials())
         except ValueError as ve:
             errs.append(ve)
         except ExceptionGroup as eg:
             errs.extend(eg.exceptions)
         if errs:
             raise ExceptionGroup(f'Errors while setting up the environment for building plugins', errs)
-        self._obtain_password(build_plugin_command, non_interactive=build_plugin_command.non_interactive)
+        self._obtain_plugin_signing_password(command, non_interactive=command.non_interactive)
         # Action
         # ... plugin_id -> (set_id, jar_path, plugin)
-        ret = self._app.build_plugin(build_plugin_command.get_plugin_identifiers())
+        ret = self._app.build_plugin(command.get_plugin_identifiers())
         # Output
         print(tabulate.tabulate([[plugin_id, plugin.get_version(), set_id, jar_path] for plugin_id, (set_id, jar_path, plugin) in ret.items()],
                                 headers=['Plugin identifier', 'Plugin version', 'Plugin set', 'Plugin JAR'],
-                                tablefmt=build_plugin_command.output_format))
+                                tablefmt=command.output_format))
 
-    def _copyright(self, string_command: StringCommand) -> None:
-        self._do_string_command(string_command)
+    def _copyright(self,
+                   command: StringCommand) -> None:
+        """
+        Implementation of the ``copyright`` command.
 
-    def _deploy_plugin(self, deploy_plugin_command: TurtlesCommand.DeployPluginCommand) -> None:
+        :param command: The command object.
+        :type command: StringCommand
+        """
+        self._do_string_command(command)
+
+    def _deploy_plugin(self,
+                       command: TurtlesCommand.DeployPluginCommand) -> None:
+        """
+        Implementation of the ``deploy_plugin`` command.
+
+        :param command: The command object.
+        :type command: TurtlesCommand.DeployPluginCommand
+        """
         errs = []
-        for prc in deploy_plugin_command.get_plugin_registry_catalogs():
+        for prc in command.get_plugin_registry_catalogs():
             try:
                 self._app.load_plugin_registry_catalogs(prc)
             except ValueError as ve:
                 errs.append(ve)
             except ExceptionGroup as eg:
                 errs.extend(eg.exceptions)
-        for pr in deploy_plugin_command.get_plugin_registries():
+        for pr in command.get_plugin_registries():
             try:
                 self._app.load_plugin_registries(pr)
             except ValueError as ve:
@@ -421,24 +509,55 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
             raise ExceptionGroup(f'Errors while setting up the environment for deploying plugins', errs)
         # Action
         # ... (src_path, plugin_id) -> list of (registry_id, layer_id, dst_path, plugin)
-        ret = self._app.deploy_plugin(deploy_plugin_command.get_plugin_jars(),
-                                      deploy_plugin_command.get_plugin_registry_layers(),
-                                      interactive=not deploy_plugin_command.non_interactive)
+        ret = self._app.deploy_plugin(command.get_plugin_jars(),
+                                      command.get_plugin_registry_layers(),
+                                      interactive=not command.non_interactive)
         # Output
         print(tabulate.tabulate([[src_path, plugin_id, plugin.get_version(), registry_id, layer_id, dst_path] for (src_path, plugin_id), val in ret.items() for registry_id, layer_id, dst_path, plugin in val],
                                 headers=['Plugin JAR', 'Plugin identifier', 'Plugin version', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
-                                tablefmt=deploy_plugin_command.output_format))
+                                tablefmt=command.output_format))
 
-    def _do_string_command(self, string_command: StringCommand) -> None:
-        string_command()
+    def _do_string_command(self,
+                           command: StringCommand) -> None:
+        """
+        Implementation of string commands.
 
-    def _dp(self, deploy_plugin_command: TurtlesCommand.DeployPluginCommand) -> None:
-        return self._deploy_plugin(deploy_plugin_command)
+        :param command: The command object.
+        :type command: StringCommand
+        """
+        command()
 
-    def _license(self, string_command: StringCommand) -> None:
-        self._do_string_command(string_command)
+    def _dp(self,
+            command: TurtlesCommand.DeployPluginCommand) -> None:
+        """
+        Implementation of the ``dp`` command.
 
-    def _obtain_password(self, plugin_building_options: PluginBuildingOptions, non_interactive: bool=False) -> None:
+        :param command: The command object.
+        :type command: TurtlesCommand.DeployPluginCommand
+        """
+        return self._deploy_plugin(command)
+
+    def _license(self,
+                 command: StringCommand) -> None:
+        """
+        Implementation of the ``license`` command.
+
+        :param command: The command object.
+        :type command: StringCommand
+        """
+        self._do_string_command(command)
+
+    def _obtain_plugin_signing_password(self,
+                                        plugin_building_options: PluginBuildingOptions,
+                                        non_interactive: bool=False) -> None:
+        """
+        Ensures the plugin signing password is specified.
+
+        :param plugin_building_options:
+        :type plugin_building_options: PluginBuildingOptions
+        :param non_interactive:
+        :type non_interactive: bool
+        """
         if plugin_building_options.plugin_signing_password:
             _p = plugin_building_options.plugin_signing_password
         elif not non_interactive:
@@ -447,30 +566,37 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
             self._parser.error('no plugin signing password specified while in non-interactive mode')
         self._app.set_plugin_signing_password(lambda: _p)
 
-    def _release_plugin(self, release_plugin_command: TurtlesCommand.ReleasePluginCommand) -> None:
+    def _release_plugin(self,
+                        command: TurtlesCommand.ReleasePluginCommand) -> None:
+        """
+        Implementation of the ``release-plugin`` command.
+
+        :param command: The command object.
+        :type command: TurtlesCommand.ReleasePluginCommand
+        """
         errs = []
-        for psc in release_plugin_command.get_plugin_set_catalogs():
+        for psc in command.get_plugin_set_catalogs():
             try:
                 self._app.load_plugin_set_catalogs(psc)
             except ValueError as ve:
                 errs.append(ve)
             except ExceptionGroup as eg:
                 errs.extend(eg.exceptions)
-        for ps in release_plugin_command.get_plugin_sets():
+        for ps in command.get_plugin_sets():
             try:
                 self._app.load_plugin_sets(ps)
             except ValueError as ve:
                 errs.append(ve)
             except ExceptionGroup as eg:
                 errs.extend(eg.exceptions)
-        for prc in release_plugin_command.get_plugin_registry_catalogs():
+        for prc in command.get_plugin_registry_catalogs():
             try:
                 self._app.load_plugin_registry_catalogs(prc)
             except ValueError as ve:
                 errs.append(ve)
             except ExceptionGroup as eg:
                 errs.extend(eg.exceptions)
-        for pr in release_plugin_command.get_plugin_registries():
+        for pr in command.get_plugin_registries():
             try:
                 self._app.load_plugin_registries(pr)
             except ValueError as ve:
@@ -478,34 +604,50 @@ class TurtlesCli(BaseCli[TurtlesCommand]):
             except ExceptionGroup as eg:
                 errs.extend(eg.exceptions)
         try:
-            self._app.load_plugin_signing_credentials(release_plugin_command.get_plugin_signing_credentials())
+            self._app.load_plugin_signing_credentials(command.get_plugin_signing_credentials())
         except ValueError as ve:
             errs.append(ve)
         except ExceptionGroup as eg:
             errs.extend(eg.exceptions)
         if errs:
             raise ExceptionGroup(f'Errors while setting up the environment for deploying plugins', errs)
-        self._obtain_password(release_plugin_command, non_interactive=release_plugin_command.non_interactive)
+        self._obtain_plugin_signing_password(command, non_interactive=command.non_interactive)
         # Action
         # ... plugin_id -> list of (registry_id, layer_id, dst_path, plugin)
-        ret = self._app.release_plugin(release_plugin_command.get_plugin_identifiers(),
-                                       release_plugin_command.get_plugin_registry_layers(),
-                                       interactive=not release_plugin_command.non_interactive)
+        ret = self._app.release_plugin(command.get_plugin_identifiers(),
+                                       command.get_plugin_registry_layers(),
+                                       interactive=not command.non_interactive)
         # Output
         print(tabulate.tabulate([[plugin_id, plugin.get_version(), registry_id, layer_id, dst_path] for plugin_id, val in ret.items() for registry_id, layer_id, dst_path, plugin in val],
                                 headers=['Plugin identifier', 'Plugin version', 'Plugin registry', 'Plugin registry layer', 'Deployed JAR'],
-                                tablefmt=release_plugin_command.output_format))
+                                tablefmt=command.output_format))
 
-    def _rp(self, release_plugin_command: TurtlesCommand.ReleasePluginCommand) -> None:
-        self._release_plugin(release_plugin_command)
+    def _rp(self, command: TurtlesCommand.ReleasePluginCommand) -> None:
+        """
+        Implementation of the ``rp`` command.
 
-    def _version(self, string_command: StringCommand) -> None:
-        self._do_string_command(string_command)
+        :param command: The command object.
+        :type command: TurtlesCommand.ReleasePluginCommand
+        """
+        self._release_plugin(command)
+
+    def _version(self, command: StringCommand) -> None:
+        """
+        Implementation of the ``version`` command.
+
+        :param command: The command object.
+        :type command: StringCommand
+        """
+        self._do_string_command(command)
 
 
-def main():
+def main() -> None:
+    """
+    Main entry point of the module.
+    """
     TurtlesCli().run()
 
 
+# Main entry point of the module.
 if __name__ == '__main__':
     main()

@@ -51,6 +51,7 @@ class TestPluginSetCatalog(PydanticTestCase):
                                                   'plugin-set-files': [
                                                       'one.yaml'
                                                   ]}).initialize(ROOT)
+        self.valid = [self.valid_absolute, self.valid_relative]
 
     def test_missing_kind(self) -> None:
         self.assertPydanticMissing(lambda: PluginSetCatalog(),
@@ -85,8 +86,8 @@ class TestPluginSetCatalog(PydanticTestCase):
         self.assertRaises(ValueError, lambda: psc.get_plugin_set_files())
 
     def test_kind(self) -> None:
-        self.assertEqual(self.valid_absolute.kind, 'PluginSetCatalog')
-        self.assertEqual(self.valid_relative.kind, 'PluginSetCatalog')
+        for valid in self.valid:
+            self.assertEqual(valid.kind, 'PluginSetCatalog')
 
     def test_get_plugin_set_files(self) -> None:
         self.assertListEqual(self.valid_absolute.get_plugin_set_files(),
@@ -106,6 +107,7 @@ class _BasePluginSetBuilderTestCase(ABC, PydanticTestCase):
         self.valid_relative = self.instance(type=self.type(),
                                             main='maindir',
                                             test='testdir').initialize(ROOT)
+        self.valid = [self.valid_absolute, self.valid_relative]
 
     @abstractmethod
     def instance(self, **kwargs) -> BasePluginSetBuilder:
@@ -157,8 +159,8 @@ class _BasePluginSetBuilderTestCase(ABC, PydanticTestCase):
         self.assertRaises(ValueError, lambda: psb.get_test())
 
     def test_get_type(self) -> None:
-        self.assertEqual(self.valid_absolute.get_type(), self.type())
-        self.assertEqual(self.valid_relative.get_type(), self.type())
+        for valid in self.valid:
+            self.assertEqual(valid.get_type(), self.type())
 
     def test_get_main(self) -> None:
         self.assertEqual(self.valid_absolute.get_main(), Path('/tmp/maindir'))

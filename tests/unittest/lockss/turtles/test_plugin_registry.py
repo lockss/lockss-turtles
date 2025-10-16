@@ -259,6 +259,12 @@ class TestPluginRegistryLayer(PydanticTestCase):
         for valid in self.valid:
             self.assertEqual(valid.get_plugin_registry(), self.fake_plugin_registry)
 
+    def test_path_dot_works(self) -> None:
+        prl = PluginRegistryLayer(id='mylayer',
+                                  name='My Layer',
+                                  path='.').initialize(self.fake_plugin_registry)
+        self.assertEqual(prl.get_path(), ROOT)
+
 
 class TestPluginRegistry(PydanticTestCase):
 

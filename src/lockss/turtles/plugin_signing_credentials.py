@@ -35,21 +35,50 @@ Module to represent plugin signing credentials.
 from pathlib import Path
 from typing import Literal
 
-from pydantic.v1 import Field
+from pydantic import Field
 
 from .util import BaseModelWithRoot
 
 
+#: A type alias for the plugin signing credentials kind.
 PluginSigningCredentialsKind = Literal['PluginSigningCredentials']
 
 
 class PluginSigningCredentials(BaseModelWithRoot):
-    kind: PluginSigningCredentialsKind = Field(description="This object's kind")
-    plugin_signing_keystore: str = Field(title='Plugin Signing Keystore', description='A path to the plugin signing keystore', alias='plugin-signing-keystore')
-    plugin_signing_alias: str = Field(title='Plugin Signing Alias', description='The plugin signing alias to use', alias='plugin-signing-alias')
+    """
+    A Pydantic model (``lockss.turtles.util.BaseModelWithRoot``) to represent
+    plugin signing credentials.
+    """
+
+    #: This object's kind.
+    kind: PluginSigningCredentialsKind = Field(title='Kind',
+                                               description="This object's kind")
+
+    #: Path to the plugin signing keystore.
+    plugin_signing_keystore: str = Field(alias='plugin-signing-keystore',
+                                         title='Plugin Signing Keystore',
+                                         description='A path to the plugin signing keystore')
+
+    #: Alias to use from the plugin signing keystore.
+    plugin_signing_alias: str = Field(alias='plugin-signing-alias',
+                                      title='Plugin Signing Alias',
+                                      description='The plugin signing alias to use')
 
     def get_plugin_signing_alias(self) -> str:
+        """
+        Returns the alias to use from the plugin signing keystore.
+
+        :return: The plugin signing alias.
+        :rtype: str
+        """
         return self.plugin_signing_alias
 
     def get_plugin_signing_keystore(self) -> Path:
+        """
+        The file path for the plugin signing keystore; a relative path is
+        understood to be relative to the file containing the definition.
+
+        :return: The file path for the plugin signing keystore.
+        :rtype: Path
+        """
         return self.get_root().joinpath(self.plugin_signing_keystore)

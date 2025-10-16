@@ -6,7 +6,7 @@ registries.
 """
 
 #: This package's version.
-__version__ = '0.6.0-dev24'
+__version__ = '0.6.0-dev27'
 
 #: This package's copyright.
 __copyright__ = '''

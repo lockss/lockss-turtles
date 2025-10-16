@@ -293,7 +293,7 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
         :param keystore_alias: The alias to use in the plugin signing keystore.
         :type keystore_alias: str
         :param keystore_password: The plugin signing password.
-        :type keystore_password:
+        :type keystore_password: Optional[Callable[[], str]]
         :raises subprocess.CalledProcessError: If a subprocess fails.
         """
         if not self._built:
@@ -302,7 +302,7 @@ class MavenPluginSetBuilder(BasePluginSetBuilder):
                    f'-Dkeystore.file={keystore_path!s}',
                    f'-Dkeystore.alias={keystore_alias}']
             if keystore_password:
-                cmd.extend(f'-Dkeystore.password={keystore_password()}')
+                cmd.append(f'-Dkeystore.password={keystore_password()}')
             try:
                 subprocess.run(cmd, cwd=self.get_root(), check=True, stdout=sys.stdout, stderr=sys.stderr)
             except subprocess.CalledProcessError as cpe:
