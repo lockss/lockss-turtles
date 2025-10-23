@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2000-2024, Board of Trustees of Leland Stanford Jr. University
+# Copyright (c) 2000-2025, Board of Trustees of Leland Stanford Jr. University
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -28,6 +28,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import lockss.turtles.cli
+"""
+Entry point for the ``lockss.turtles`` module.
+"""
 
-lockss.turtles.cli.main()
+from lockss.turtles.cli import main
+
+main()

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2000-2024, Board of Trustees of Leland Stanford Jr. University
+# Copyright (c) 2000-2025, Board of Trustees of Leland Stanford Jr. University
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -28,28 +28,77 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from pathlib import Path, PurePath
-import json
+"""
+Utility module.
+"""
 
-import jsonschema
-import jsonschema.exceptions
-import yaml
+# Remove in Python 3.14; see https://stackoverflow.com/a/33533514
+from __future__ import annotations
 
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any, Optional, Union
 
-def _load_and_validate(schema_path, instance_path, multiple=False):
-    with schema_path.open('r') as f:
-        schema = json.load(f)
-    with instance_path.open('r') as f:
-        ret = list(yaml.safe_load_all(f) if multiple else [yaml.safe_load(f)])
-    for instance in ret:
-        try:
-            jsonschema.validate(instance, schema)
-        except jsonschema.exceptions.ValidationError as validation_exception:
-            raise Exception(validation_exception.message) from validation_exception
-    return ret if multiple else ret[0]
+from lockss.pybasic.fileutil import path
+from pydantic import BaseModel
 
 
-def _path(purepath_or_string):
-    if not issubclass(type(purepath_or_string), PurePath):
-        purepath_or_string = Path(purepath_or_string)
-    return purepath_or_string.expanduser().resolve()
+#: Type alias for the union of ``Path`` and ``str``.
+PathOrStr = Union[Path, str]
+
+
+class BaseModelWithRoot(BaseModel):
+    """
+    A Pydantic model with a root path which can be used to resolve relative
+    paths.
+    """
+
+    #: An internal root path.
+    _root: Optional[Path]
+
+    def model_post_init(self, context: Any) -> None:
+        """
+        Pydantic post-initialization method to create the ``_root`` field.
+        """
+        self._root = None
+
+    def get_root(self) -> Path:
+        """
+        Returns this object's root path.
+
+        See ``initialize``.
+
+        :return: This object's root path.
+        :rtype: Path
+        :raises ValueError: If this object's ``initialize`` method was not
+                            called.
+        """
+        if self._root is None:
+            raise ValueError('Uninitialized root')
+        return self._root
+
+    def initialize(self,
+                   root_path_or_str: PathOrStr) -> BaseModelWithRoot:
+        """
+        Mandatory initialization of the root path.
+
+        :param root_path_or_str: This object's root path.
+        :type root_path_or_str: PathOrStr
+        :return: This object, for chaining.
+        :rtype: BaseModelWithRoot
+        """
+        self._root = path(root_path_or_str)
+        return self
+
+
+def file_or(paths: Iterable[Path]) -> str:
+    """
+    Turns an iterable of file paths into a ``" or "``-separated string suitable
+    for CLI messages.
+
+    :param paths: A non-null list of file paths.
+    :type paths: Iterable[Path]
+    :return: A ``" or "``-separated string of the given file paths.
+    :rtype: str
+    """
+    return ' or '.join(map(str, paths))
