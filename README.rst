@@ -2,7 +2,7 @@
 Turtles
 =======
 
-.. |RELEASE| replace:: 0.6.0-dev27 NOT YET RELEASED
+.. |RELEASE| replace:: 0.7.0-dev1 NOT YET RELEASED
 .. |RELEASE_DATE| replace:: NOT YET RELEASED
 .. |TURTLES| replace:: **Turtles**
 

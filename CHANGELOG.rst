@@ -3,10 +3,16 @@ Release Notes
 =============
 
 -----
+0.7.0
+-----
+
+Released: NOT YET RELEASED
+
+-----
 0.6.0
 -----
 
-Released: ?
+Released: 2025-10-23
 
 *  **Changes**
 
