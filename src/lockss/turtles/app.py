@@ -79,7 +79,7 @@ class Turtles(object):
     CONFIG_DIR_NAME: ClassVar[str] = 'lockss-turtles'
 
     #: The Turtles configuration directory under ``$XDG_CONFIG_HOME`` (by
-    # default ``$HOME/.config``, which is typically ``/home/$USER/.config``).
+    #: default ``$HOME/.config``, which is typically ``/home/$USER/.config``).
     XDG_CONFIG_DIR: ClassVar[Path] = Path(xdg.xdg_config_home(), CONFIG_DIR_NAME)
 
     #: The Turtles configuration directory under ``/etc``.
