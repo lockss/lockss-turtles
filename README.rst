@@ -2,7 +2,7 @@
 Turtles
 =======
 
-.. |RELEASE| replace:: 0.6.0-post1
+.. |RELEASE| replace:: 0.6.1
 .. |RELEASE_DATE| replace:: 2026-02-03
 .. |TURTLES| replace:: **Turtles**
 
