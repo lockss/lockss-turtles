@@ -2,8 +2,8 @@
 Turtles
 =======
 
-.. |RELEASE| replace:: 0.6.0
-.. |RELEASE_DATE| replace:: 2025-10-23
+.. |RELEASE| replace:: 0.6.0-post1
+.. |RELEASE_DATE| replace:: 2026-02-03
 .. |TURTLES| replace:: **Turtles**
 
 .. image:: https://assets.lockss.org/images/logos/turtles/turtles_128x128.png
@@ -22,6 +22,9 @@ Turtles
 ----
 
 Quick Start::
+
+   # Requires Python 3.9-3.13
+   python --version
 
    # Install with pipx
    pipx install lockss-turtles
