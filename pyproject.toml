@@ -32,7 +32,7 @@ version = "0.7.0-dev1" # Always change in __init__.py, and at release time in RE
 description = "Library and command line tool to manage LOCKSS plugin sets and LOCKSS plugin registries"
 license = { text = "BSD-3-Clause" }
 readme = "README.rst"
-requires-python = ">=3.9,<4.0"
+requires-python = ">=3.9,<3.14"
 authors = [
     { name = "Thib Guicherd-Callin",  email = "thib@cs.stanford.edu" },
 ]

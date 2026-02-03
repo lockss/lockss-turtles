@@ -23,6 +23,9 @@ Turtles
 
 Quick Start::
 
+   # Requires Python 3.9-3.13
+   python --version
+
    # Install with pipx
    pipx install lockss-turtles
 
