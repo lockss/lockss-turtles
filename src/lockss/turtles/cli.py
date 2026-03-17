@@ -43,7 +43,7 @@ from pathlib import Path
 from traceback import format_exception # modified by 'exceptiongroup' to handle ExceptionGroup
 from typing import Optional
 
-from click_extra import ExtraContext, Section, TableFormat, color_option, echo, group, option, option_group, pass_context, pass_obj, print_table, prompt, show_params_option, table_format_option
+from click_extra import ChoiceSource, EnumChoice, ExtraContext, Section, TableFormat, color_option, echo, group, option, option_group, pass_context, pass_obj, print_table, prompt, show_params_option, table_format_option
 from click_plugins import with_plugins
 from lockss.pybasic.cliutil import click_path, make_extra_context_settings
 from lockss.pybasic.errorutil import InternalError
@@ -308,7 +308,7 @@ _interactive_option = option('--interactive/--non-interactive', is_flag=True, de
 _output_option_group = option_group(
     'Output options',
     option('--headings/--no-headings', is_flag=True, default=True, help='Set whether to include column headings in tabular output.'),
-    table_format_option
+    option('--table-format', '-T', type=EnumChoice(TableFormat, choice_source=ChoiceSource.VALUE), default=TableFormat.SIMPLE, show_default=True, help=f'Set the rendering of tables to the given style.')
 )
 
 
