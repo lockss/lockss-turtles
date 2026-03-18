@@ -3,12 +3,24 @@ Release Notes
 =============
 
 -----
+0.7.0
+-----
+
+Released: 2026-03-18
+
+Requires Python 3.10.
+
+*  **Features**
+
+   *  New command line infrastructure based on `Click Extra <https://kdeldycke.github.io/click-extra>`_, `Cloup <https://cloup.readthedocs.io/>`_ and `Click <https://click.palletsprojects.com/>`_, including expanded tabular output styles, command aliases.
+
+-----
 0.6.1
 -----
 
 Released: 2026-02-03
 
-*  Requires Python 3.9-3.13.
+Requires Python 3.9-3.13.
 
 -----
 0.6.0
