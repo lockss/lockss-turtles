@@ -1,4 +1,4 @@
-# Copyright (c) 2000-2025, Board of Trustees of Leland Stanford Jr. University
+# Copyright (c) 2000-2026, Board of Trustees of Leland Stanford Jr. University
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -28,11 +28,11 @@
 
 [project]
 name = "lockss-turtles"
-version = "0.7.0-dev1" # Always change in __init__.py, and at release time in README.rst and CHANGELOG.rst
+version = "0.7.0-dev5" # Always change in __init__.py, and at release time in README.rst and CHANGELOG.rst
 description = "Library and command line tool to manage LOCKSS plugin sets and LOCKSS plugin registries"
 license = { text = "BSD-3-Clause" }
 readme = "README.rst"
-requires-python = ">=3.9,<3.14"
+requires-python = ">=3.10,<4.0"
 authors = [
     { name = "Thib Guicherd-Callin",  email = "thib@cs.stanford.edu" },
 ]
@@ -40,12 +40,15 @@ maintainers = [
     { name = "Thib Guicherd-Callin",  email = "thib@cs.stanford.edu" }
 ]
 dependencies = [
+    "click-command-tree (>=1.2.0,<1.3.0)",
+    "click-extra[pygments] (>=7.5.0,<7.6.0)",
+    "click-plugins (>=1.1.1.2,<1.2.0)",
     "exceptiongroup (>=1.3.0,<1.4.0)",
     "java-manifest (>=1.1.0,<1.2.0)",
-    "lockss-pybasic (>=0.1.1,<0.2.0)",
+    "lockss-pybasic (>=0.2.0,<0.3.0)",
+    "pydantic (>=2.12.0,<2.13.0)",
     "pyyaml (>=6.0.0,<6.1.0)",
     "xdg (>=6.0.0,<6.1.0)",
-    "pydantic (>=2.11.0,<2.12.0)",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
