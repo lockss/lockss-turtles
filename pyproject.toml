@@ -45,7 +45,7 @@ dependencies = [
     "click-plugins (>=1.1.1.2,<1.2.0)",
     "exceptiongroup (>=1.3.0,<1.4.0)",
     "java-manifest (>=1.1.0,<1.2.0)",
-    "lockss-pybasic (==0.2.0-dev16)",
+    "lockss-pybasic (>=0.2.0,<0.3.0)",
     "pydantic (>=2.12.0,<2.13.0)",
     "pyyaml (>=6.0.0,<6.1.0)",
     "xdg (>=6.0.0,<6.1.0)",
