@@ -43,7 +43,7 @@ from pathlib import Path
 from traceback import format_exception # modified by 'exceptiongroup' to handle ExceptionGroup
 from typing import Optional
 
-from click_extra import ChoiceSource, EnumChoice, ExtraContext, Section, TableFormat, color_option, echo, group, option, option_group, pass_context, pass_obj, print_table, prompt, show_params_option, table_format_option
+from click_extra import ExtraContext, Section, TableFormat, color_option, echo, group, option, option_group, pass_context, pass_obj, print_table, prompt, show_params_option
 from click_plugins import with_plugins
 from lockss.pybasic.cliutil import click_path, make_extra_context_settings, make_table_format_option
 from lockss.pybasic.errorutil import InternalError
@@ -58,6 +58,7 @@ from .util import file_or
 
 @dataclass(kw_only=True)
 class _Opts:
+    """Data class to hold parsed command line options."""
     plugin_identifier: tuple[PluginIdentifier, ...] = ()
     plugin_identifiers: tuple[Path, ...] = ()
     plugin_jar: tuple[Path, ...] = ()
@@ -78,8 +79,15 @@ class _Opts:
 
 
 class _TurtlesCli(object):
+    """Turtles command line application."""
 
-    def __init__(self, ctx: ExtraContext):
+    def __init__(self, ctx: ExtraContext) -> None:
+        """
+        Constructor.
+
+        :param ctx: The Click Extra context.
+        :type ctx: ExtraContext
+        """
         super().__init__()
         self._ctx: ExtraContext = ctx
         self._app: Turtles = Turtles()
@@ -87,9 +95,7 @@ class _TurtlesCli(object):
         self._opts: Optional[_Opts] = None
 
     def build_plugin(self) -> None:
-        """
-        Implementation of the ``build-plugin`` command.
-        """
+        """Implementation of the ``build-plugin`` command."""
         self._initialize_plugin_building_operation()
         self._fail_if_errs()
         ret: dict[str, BuildPluginResult] = self._app.build_plugin(self._get_plugin_identifiers())
@@ -98,9 +104,7 @@ class _TurtlesCli(object):
                     table_format=opts.table_format)
 
     def deploy_plugin(self) -> None:
-        """
-        Implementation of the ``deploy_plugin`` command.
-        """
+        """Implementation of the ``deploy_plugin`` command."""
         self._initialize_plugin_deployment_operation()
         self._fail_if_errs()
         ret: dict[tuple[Path, PluginIdentifier], list[DeployPluginResult]] = self._app.deploy_plugin(self._get_plugin_jars(),
@@ -111,15 +115,23 @@ class _TurtlesCli(object):
                     table_format=opts.table_format)
 
     def dispatch(self, method: Callable[[], None], **cli_kwargs) -> None:
+        """
+        Initializes from the given command line options and invokes the given
+        (bound) method.
+
+        :param method: A (bound) method.
+        :type method: Callable[[], None]
+        :param cli_kwargs: The command line arguments passed by Click Extra.
+        :type cli_kwargs: dict[str, Any]
+        :return:
+        """
         if not ismethod(method):
             raise InternalError() from ValueError(method)
         self._opts = _Opts(**cli_kwargs)
         method()
 
     def release_plugin(self) -> None:
-        """
-        Implementation of the ``release-plugin`` command.
-        """
+        """Implementation of the ``release-plugin`` command."""
         self._initialize_plugin_building_operation()
         self._initialize_plugin_deployment_operation()
         self._fail_if_errs()
@@ -138,15 +150,12 @@ class _TurtlesCli(object):
         """
         Returns the cumulative list of plugin identifiers, from
         ``plugin_identifier`` and the identifiers in ``plugin_identifiers``
-         files.
+         files. Exits if the list of plugin identifiers ends up empty.
 
-        :return: The cumulative list of plugin identifiers, from
-                ``plugin_identifier`` and the identifiers in
-                ``plugin_identifiers`` files.
+        :return: The cumulative list of plugin identifiers.
         :rtype: list[PluginIdentifier]
         """
-        ret = [*((opts := self._opts).plugin_identifier or []),
-               *chain.from_iterable(file_lines(file_path) for file_path in opts.plugin_identifiers or [])]
+        ret = [*((opts := self._opts).plugin_identifier or []), *chain.from_iterable(file_lines(file_path) for file_path in opts.plugin_identifiers or [])]
         if ret:
             return ret
         self._ctx.fail('Empty list of plugin identifiers')
@@ -154,15 +163,13 @@ class _TurtlesCli(object):
     def _get_plugin_jars(self) -> list[Path]:
         """
         Returns the cumulative list of plugin JARs, from ``plugin_jar`` and the
-        plugin JARs in ``plugin_jars``
-         files.
+        plugin JARs in ``plugin_jars`` files. Exits if the list of plugin JARs
+        ends up empty.
 
-        :return: The cumulative list of plugin JARs, from ``plugin_jar`` and the
-                 plugin JARs in ``plugin_jars`` files.
+        :return: The cumulative list of plugin JARs.
         :rtype: list[Path]
         """
-        ret = [*((opts := self._opts).plugin_jar or []),
-               *chain.from_iterable(file_lines(file_path) for file_path in opts.plugin_jars or [])]
+        ret = [*((opts := self._opts).plugin_jar or []), *chain.from_iterable(file_lines(file_path) for file_path in opts.plugin_jars or [])]
         if ret:
             return ret
         self._ctx.fail('Empty list of plugin JARs')
@@ -178,13 +185,13 @@ class _TurtlesCli(object):
 
     def _get_plugin_registry_catalogs(self) -> list[Path]:
         """
-        Returns the cumulative plugin registry catalog files.
+        Returns the cumulative plugin registry catalog files if any plugin set
+        files or plugin registry catalog files are specified (possibly an empty
+        list), or the first default plugin registry catalog file if no plugin
+        registry files nor plugin registry catalog files are specified. Exits if
+        the result is that no plugin registry catalog is available.
 
-        :return: The cumulative plugin registry catalog files if any plugin set
-                 files or plugin registry catalog files are specified (possibly
-                 an empty list), or the first default plugin registry catalog
-                 file if no plugin registry files nor plugin registry catalog
-                 files are specified.
+        :return: The cumulative plugin registry catalog files.
         :rtype: list[Path]
         """
         if (opts := self._opts).plugin_registry or opts.plugin_registry_catalog:
@@ -197,11 +204,10 @@ class _TurtlesCli(object):
         """
         Returns the cumulative list of plugin registry layer identifiers, from
         ``plugin_registry_layer`` and the identifiers in
-        ``plugin_registry_layers`` files.
+        ``plugin_registry_layers`` files. Exits if the list of plugin registry
+        layers ends up empty.
 
-        :return: The cumulative list of plugin registry layer identifiers, from
-                ``plugin_registry_layer`` and the identifiers in
-                ``plugin_registry_layers`` files.
+        :return: The cumulative list of plugin registry layer identifiers.
         :rtype: list[PluginRegistryLayerIdentifier]
         """
         ret = [*((opts := self._opts).plugin_registry_layer or []),
@@ -224,12 +230,13 @@ class _TurtlesCli(object):
 
     def _get_plugin_set_catalogs(self) -> list[Path]:
         """
-        Returns the cumulative plugin set catalog files.
+        Returns the cumulative plugin set catalog files if any plugin set files
+        or plugin set catalog files are specified (possibly an empty list), or
+        the first default plugin set catalog file if no plugin set files nor
+        plugin set catalog files are specified. Exits if the result is that no
+        plugin set catalog is available.
 
-        :return: The cumulative plugin set catalog files if any plugin set files
-                 or plugin set catalog files are specified (possibly an empty
-                 list), or the first default plugin set catalog file if no
-                 plugin set files nor plugin set catalog files are specified.
+        :return: The cumulative plugin set catalog files.
         :rtype: list[Path]
         """
         if (opts := self._opts).plugin_set or opts.plugin_set_catalog:
@@ -240,10 +247,11 @@ class _TurtlesCli(object):
 
     def _get_plugin_signing_credentials(self) -> Path:
         """
-        Returns the plugin signing credentials file.
+        Returns the plugin signing credentials file, or the first default
+        plugin signing credentials file if not specified. Exits if the result is
+        that no plugin signing credentials file is available.
 
-        :return: The plugin signing credentials file, or the first default
-                 plugin signing credentials file if not specified.
+        :return: The plugin signing credentials file.
         :rtype: Path
         """
         if psc := self._opts.plugin_signing_credentials:
@@ -253,6 +261,11 @@ class _TurtlesCli(object):
         self._ctx.fail(f'No default plugin signing credentials file found: {file_or(Turtles.default_plugin_signing_credentials_choices())}')
 
     def _initialize_plugin_building_operation(self) -> None:
+        """
+        Initializes a plugin building operation by loading plugin set catalogs,
+        then plugin sets, then plugin signing credentials, then obtaining the
+        plugin signing password if necessary.
+        """
         app, errs = self._app, self._errs
         for psc in self._get_plugin_set_catalogs():
             try:
@@ -277,6 +290,10 @@ class _TurtlesCli(object):
         self._obtain_plugin_signing_password()
 
     def _initialize_plugin_deployment_operation(self) -> None:
+        """
+        Initializes a plugin deployment operation by loading plugin registry
+        catalogs, then plugin registries.
+        """
         app = self._app
         errs = []
         for prc in self._get_plugin_registry_catalogs():
@@ -295,6 +312,7 @@ class _TurtlesCli(object):
                 errs.extend(eg.exceptions)
 
     def _obtain_plugin_signing_password(self) -> None:
+        """Obtains the plugin signing password if necessary."""
         if (opts := self._opts).plugin_signing_password is None:
             if not opts.interactive:
                 self._ctx.fail(f'Cannot prompt for plugin signing plugin in non-interactive mode')
@@ -302,9 +320,11 @@ class _TurtlesCli(object):
             opts.plugin_signing_password = ''
 
 
+#: The --interactive/--non-interactive option.
 _interactive_option = option('--interactive/--non-interactive', is_flag=True, default=True, help='Set whether to allow interactive prompts for the plugin signing password or for first-time deployment confirmations.')
 
 
+#: The output option group: --heading/--no-headings, --table-format/-T
 _output_option_group = option_group(
     'Output options',
     option('--headings/--no-headings', is_flag=True, default=True, help='Set whether to include column headings in tabular output.'),
@@ -312,6 +332,7 @@ _output_option_group = option_group(
 )
 
 
+#: The plugin building option group: --plugin-set/-s, --plugin-set-catalog/-S, --plugin-signing-credentials/-c, --plugin-signing-password/-P
 _plugin_building_option_group = option_group(
     'Plugin building options',
     option('--plugin-set', '-s', metavar='FILE', type=click_path('ferz'), multiple=True, help='Add the plugin set definitions from FILE to the loaded plugin sets.'),
@@ -321,6 +342,7 @@ _plugin_building_option_group = option_group(
 )
 
 
+#: The plugin deployment option group: --plugin-registry/-r, --plugin-registry-catalog/-R
 _plugin_deployment_option_group = option_group(
     'Plugin deployment options',
     option('--plugin-registry', '-r', metavar='FILE', type=click_path('ferz'), multiple=True, help='Add the plugin registry definitions from FILE to the loaded plugin registries.'),
@@ -328,6 +350,7 @@ _plugin_deployment_option_group = option_group(
 )
 
 
+#: The plugin identifier option group: --plugin-identifier/-i, --plugin-identifiers/-I
 _plugin_identifier_option_group = option_group(
     'Plugin identifier options',
     option('--plugin-identifier', '-i', metavar='IDENT', multiple=True, help='Add IDENT to the list of plugin identifiers to process.'),
@@ -335,6 +358,7 @@ _plugin_identifier_option_group = option_group(
 )
 
 
+#: The plugin JAR option group: --plugin-jar/-j, --plugin-jars/-J
 _plugin_jar_option_group = option_group(
     'Plugin JAR options',
     option('--plugin-jar', '-j', metavar='FILE', type=click_path('ferz'), multiple=True, help='Add FILE to the list of plugin JARs to process.'),
@@ -342,6 +366,7 @@ _plugin_jar_option_group = option_group(
 )
 
 
+#: The plugin registry layer option group: --plugin-registry-layer/-l, --plugin-registry-layers/-L, --production/-p, --testing/-t
 _plugin_registry_layer_option_group = option_group(
     'Plugin registry layer options',
     option('--plugin-registry-layer', '-l', metavar='IDENT', multiple=True, help='Add IDENT to the list of plugin registry layers to process.'),
@@ -357,6 +382,7 @@ _plugin_registry_layer_option_group = option_group(
 @show_params_option
 @pass_context
 def _turtles(ctx: ExtraContext, **kwargs) -> None:
+    """``turtles`` command."""
     ctx.obj = _TurtlesCli(ctx)
 
 
@@ -370,11 +396,13 @@ _COMMANDS = Section('Principal commands')
 @_interactive_option
 @pass_obj
 def _build_plugin(cli: _TurtlesCli, **kwargs) -> None:
+    """``turtles build-plugin`` command."""
     cli.dispatch(cli.build_plugin, **kwargs)
 
 
 @_turtles.command('copyright', help='Show the copyright and exit.')
 def _copyright() -> None:
+    """``turtles copyright`` command."""
     echo(__copyright__)
 
 
@@ -386,11 +414,13 @@ def _copyright() -> None:
 @_interactive_option
 @pass_obj
 def _deploy_plugin(cli: _TurtlesCli, **kwargs) -> None:
+    """``turtles deploy-plugin`` command."""
     cli.dispatch(cli.deploy_plugin, **kwargs)
 
 
 @_turtles.command('license', help='Show the software license and exit.')
 def _license() -> None:
+    """``turtles license`` command."""
     echo(__license__)
 
 
@@ -403,6 +433,7 @@ def _license() -> None:
 @_interactive_option
 @pass_obj
 def _release_plugin(cli: _TurtlesCli, **kwargs) -> None:
+    """``turtles release-plugin`` command."""
     cli.dispatch(cli.release_plugin, **kwargs)
 
 
@@ -411,13 +442,12 @@ def _release_plugin(cli: _TurtlesCli, **kwargs) -> None:
 
 @_turtles.command('version', help='Show the version number and exit.')
 def _version() -> None:
+    """``turtles version`` command."""
     echo(__version__)
 
 
 def main() -> None:
-    """
-    Main entry point of the module.
-    """
+    """Main entry point of the module."""
     _turtles()
 
 
