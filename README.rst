@@ -2,7 +2,7 @@
 Turtles
 =======
 
-.. |RELEASE| replace:: 0.7.0-dev5 NOT YET RELEASED
+.. |RELEASE| replace:: 0.8.0-dev1
 .. |RELEASE_DATE| replace:: NOT YET RELEASED
 .. |TURTLES| replace:: **Turtles**
 
@@ -23,7 +23,7 @@ Turtles
 
 Quick Start::
 
-   # Requires Python 3.9-3.13
+   # Requires Python 3.10 or greater
    python --version
 
    # Install with pipx

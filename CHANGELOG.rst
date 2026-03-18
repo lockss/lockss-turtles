@@ -3,12 +3,20 @@ Release Notes
 =============
 
 -----
-0.7.0
+0.8.0
 -----
 
 Released: NOT YET RELEASED
 
-Requires Python 3.10.
+Requires Python 3.10 or greater.
+
+-----
+0.7.0
+-----
+
+Released: 2026-03-18
+
+Requires Python 3.10 or greater.
 
 *  **Features**
 
