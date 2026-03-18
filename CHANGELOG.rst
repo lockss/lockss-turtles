@@ -6,7 +6,7 @@ Release Notes
 0.7.0
 -----
 
-Released: NOT YET RELEASED
+Released: 2026-03-18
 
 Requires Python 3.10.
 
