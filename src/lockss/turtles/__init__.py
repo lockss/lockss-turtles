@@ -10,7 +10,7 @@ __version__ = '0.7.0-dev5'
 
 #: This package's copyright.
 __copyright__ = '''
-Copyright (c) 2000-2025, Board of Trustees of Leland Stanford Jr. University
+Copyright (c) 2000-2026, Board of Trustees of Leland Stanford Jr. University
 '''.strip()
 
 #: This package's license.
