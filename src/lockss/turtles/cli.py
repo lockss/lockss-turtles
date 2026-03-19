@@ -382,7 +382,7 @@ _plugin_registry_layer_option_group = option_group(
 @show_params_option
 @pass_context
 def _turtles(ctx: ExtraContext, **kwargs) -> None:
-    """``turtles`` command."""
+    """Command line tool for managing LOCKSS plugin sets and LOCKSS plugin registries."""
     ctx.obj = _TurtlesCli(ctx)
 
 
@@ -396,13 +396,13 @@ _COMMANDS = Section('Principal commands')
 @_interactive_option
 @pass_obj
 def _build_plugin(cli: _TurtlesCli, **kwargs) -> None:
-    """``turtles build-plugin`` command."""
+    """Build (package and sign) plugins."""
     cli.dispatch(cli.build_plugin, **kwargs)
 
 
 @_turtles.command('copyright', help='Show the copyright and exit.')
 def _copyright() -> None:
-    """``turtles copyright`` command."""
+    """Show the copyright and exit."""
     echo(__copyright__)
 
 
@@ -414,13 +414,13 @@ def _copyright() -> None:
 @_interactive_option
 @pass_obj
 def _deploy_plugin(cli: _TurtlesCli, **kwargs) -> None:
-    """``turtles deploy-plugin`` command."""
+    """Deploy plugins."""
     cli.dispatch(cli.deploy_plugin, **kwargs)
 
 
 @_turtles.command('license', help='Show the software license and exit.')
 def _license() -> None:
-    """``turtles license`` command."""
+    """Show the software license and exit."""
     echo(__license__)
 
 
@@ -433,7 +433,7 @@ def _license() -> None:
 @_interactive_option
 @pass_obj
 def _release_plugin(cli: _TurtlesCli, **kwargs) -> None:
-    """``turtles release-plugin`` command."""
+    """Release (build and deploy) plugins."""
     cli.dispatch(cli.release_plugin, **kwargs)
 
 
@@ -442,7 +442,7 @@ def _release_plugin(cli: _TurtlesCli, **kwargs) -> None:
 
 @_turtles.command('version', help='Show the version number and exit.')
 def _version() -> None:
-    """``turtles version`` command."""
+    """Show the version number and exit."""
     echo(__version__)
 
 
