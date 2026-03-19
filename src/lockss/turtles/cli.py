@@ -150,7 +150,7 @@ class _TurtlesCli(object):
         """
         Returns the cumulative list of plugin identifiers, from
         ``plugin_identifier`` and the identifiers in ``plugin_identifiers``
-         files. Exits if the list of plugin identifiers ends up empty.
+        files. Exits if the list of plugin identifiers ends up empty.
 
         :return: The cumulative list of plugin identifiers.
         :rtype: list[PluginIdentifier]
@@ -324,7 +324,7 @@ class _TurtlesCli(object):
 _interactive_option = option('--interactive/--non-interactive', is_flag=True, default=True, help='Set whether to allow interactive prompts for the plugin signing password or for first-time deployment confirmations.')
 
 
-#: The output option group: --heading/--no-headings, --table-format/-T
+#: The output option group: --headings/--no-headings, --table-format/-T
 _output_option_group = option_group(
     'Output options',
     option('--headings/--no-headings', is_flag=True, default=True, help='Set whether to include column headings in tabular output.'),
