@@ -123,7 +123,6 @@ class _TurtlesCli(object):
         :type method: Callable[[], None]
         :param cli_kwargs: The command line arguments passed by Click Extra.
         :type cli_kwargs: dict[str, Any]
-        :return:
         """
         if not ismethod(method):
             raise InternalError() from ValueError(method)
