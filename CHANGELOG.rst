@@ -22,6 +22,10 @@ Requires Python 3.10 or greater.
 
    *  New command line infrastructure based on `Click Extra <https://kdeldycke.github.io/click-extra>`_, `Cloup <https://cloup.readthedocs.io/>`_ and `Click <https://click.palletsprojects.com/>`_, including expanded tabular output styles, command aliases.
 
+*  **Changes**
+
+   *  ``--output-format`` has been renamed to ``--table-format``/``-T``.
+
 -----
 0.6.1
 -----
