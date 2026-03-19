@@ -142,6 +142,7 @@ class _TurtlesCli(object):
                     table_format=opts.table_format)
 
     def _fail_if_errs(self) -> None:
+        """Fails if there are any accumulated errors."""
         if errs := self._errs:
             self._ctx.fail(''.join(format_exception(ExceptionGroup(f'{"Errors" if errs else "Error"} loading configuration files', errs))))
 
